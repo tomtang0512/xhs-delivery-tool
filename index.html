@@ -25,6 +25,9 @@
   .mgmt summary{cursor:pointer;color:#555}
   .clist{max-height:150px;overflow:auto;margin:6px 0;border:1px solid #eee;border-radius:6px}
   .citem{display:flex;justify-content:space-between;padding:3px 8px;border-bottom:1px dashed #eee;font-size:12px}
+  .ctime{cursor:pointer;color:#fff;background:#95a5a6;border-radius:4px;padding:0 5px;margin-left:6px;white-space:nowrap}
+  .ctime.tl{background:#27ae60}.ctime.td{background:#8e44ad}.ctime.tb{background:#e67e22}
+  .addrow select{border:1px solid #ccc;border-radius:6px;padding:4px 6px;font-size:12px}
   .citem .cb{cursor:pointer;color:#c0392b;padding:0 4px}
   .addrow{display:flex;gap:6px;margin-top:6px}
   .addrow button{border:1px solid #ccc;background:#f7f7f7;border-radius:6px;padding:4px 8px;font-size:12px;cursor:pointer}
@@ -62,6 +65,14 @@
       <input id="cname" placeholder="客户名" style="width:70px">
       <input id="caddr" placeholder="地址，如：天府三街199号" style="flex:1">
       <button id="cadd">添加</button>
+    </div>
+    <div class="addrow">
+      <select id="ctime" style="flex:1">
+        <option value="">习惯时段：不固定</option>
+        <option value="l">习惯时段：午餐</option>
+        <option value="d">习惯时段：晚餐</option>
+        <option value="b">习惯时段：午+晚</option>
+      </select>
     </div>
     <div class="addrow">
       <button id="cmap">📍 在地图上点选添加</button>
@@ -123,12 +134,15 @@ function renderCustomers(){
   });
   document.getElementById('cnum').textContent = customers.length;
 }
+var TIME_MAP = {l:'午餐', d:'晚餐', b:'午+晚'};
+function timeClass(t){ return t==='l'?'tl':t==='d'?'td':t==='b'?'tb':''; }
 function renderClist(){
   var el = document.getElementById('clist'); el.innerHTML='';
   customers.forEach(function(k,i){
     var d=document.createElement('div'); d.className='citem';
     var show = k.name + (k.addr ? ' <span style="color:#999">· '+k.addr+'</span>' : '');
-    d.innerHTML='<span title="'+(k.addr||k.name)+'" style="overflow:hidden;white-space:nowrap;text-overflow:ellipsis">'+show+'</span><span class="cb" title="删除" data-i="'+i+'">✖</span>';
+    var tag = '<span class="ctime '+timeClass(k.t)+'" title="点击切换习惯时段（接龙参考用）" data-t="'+i+'">'+(TIME_MAP[k.t]||'—')+'</span>';
+    d.innerHTML='<span title="'+(k.addr||k.name)+'" style="overflow:hidden;white-space:nowrap;text-overflow:ellipsis">'+show+'</span><span>'+tag+'<span class="cb" title="删除" data-i="'+i+'">✖</span></span>';
     el.appendChild(d);
   });
   document.getElementById('cnum').textContent = customers.length;
@@ -331,10 +345,18 @@ document.getElementById('addr').addEventListener('keydown',function(e){
 // ===== 客户管理 =====
 document.getElementById('clist').addEventListener('click',function(e){
   var t=e.target;
+  if(t.classList.contains('ctime')){
+    var i=+t.getAttribute('data-t');
+    var seq=['','l','d','b'];
+    var cur=seq.indexOf(customers[i].t||'');
+    customers[i].t=seq[(cur+1)%seq.length];
+    saveCust(); renderClist();
+    return;
+  }
   if(!t.classList.contains('cb')) return;
-  var i=+t.getAttribute('data-i');
-  if(!confirm('删除客户「'+customers[i].name+'」？')) return;
-  customers.splice(i,1); saveCust(); renderCustomers(); renderClist();
+  var i2=+t.getAttribute('data-i');
+  if(!confirm('删除客户「'+customers[i2].name+'」？')) return;
+  customers.splice(i2,1); saveCust(); renderCustomers(); renderClist();
 });
 document.getElementById('cadd').onclick=function(){
   var a=document.getElementById('cname').value.trim();
@@ -365,12 +387,14 @@ document.getElementById('cadd').onclick=function(){
     });
   }).then(function(r){
     if(!r){ alert('没找到这个地址，换个写法试试'); return; }
-    customers.push({name:name,addr:addr,lng:r.lng,lat:r.lat});
+    var tv=document.getElementById('ctime').value;
+    customers.push({name:name,addr:addr,lng:r.lng,lat:r.lat,t:tv});
     saveCust(); renderCustomers(); renderClist();
     document.getElementById('cname').value=''; document.getElementById('caddr').value='';
+    document.getElementById('ctime').value='';
     var h=document.getElementById('hist');
     var d=document.createElement('div');
-    d.innerHTML='<span style="color:#2980b9">➕</span> 已添加客户「'+name+' · '+addr+'」（'+r.label+'）';
+    d.innerHTML='<span style="color:#2980b9">➕</span> 已添加客户「'+name+' · '+addr+'」（'+r.label+(tv?' · '+(TIME_MAP[tv]||''):'')+'）';
     h.insertBefore(d,h.firstChild);
   }).catch(function(e){ alert(e.message||'添加失败，请重试'); });
 };

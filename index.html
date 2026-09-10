@@ -13,6 +13,8 @@
   .row{display:flex;gap:8px}
   #addr{flex:1;border:1px solid #ccc;border-radius:6px;padding:7px 9px;font-size:14px}
   #btn{background:#c0392b;color:#fff;border:0;border-radius:6px;padding:7px 14px;font-size:14px;cursor:pointer}
+  .trow{margin-top:8px}
+  #mealtime{flex:1;border:1px solid #ccc;border-radius:6px;padding:7px 9px;font-size:14px;background:#fff}
   #result{margin-top:10px;font-size:14px;line-height:1.6;min-height:20px}
   .ok{color:#1e8e3e}.mid{color:#b26a00}.bad{color:#c0392b}
   .legend{margin-top:10px;font-size:12px;color:#555;line-height:1.8;border-top:1px dashed #ddd;padding-top:8px}
@@ -36,13 +38,22 @@
     <input id="addr" placeholder="输入客户地址，如：天府三街199号">
     <button id="btn">判断</button>
   </div>
+  <div class="row trow">
+    <select id="mealtime">
+      <option value="lunch">🥗 午餐 11:30~12:30（标准窗）</option>
+      <option value="dinner">🍗 晚餐 17:30~18:30（标准窗）</option>
+      <option value="both">🍱 午+晚 两餐都要（合送一次）</option>
+      <option value="special">⏰ 特殊时间（如14:00，加收10元）</option>
+    </select>
+  </div>
   <div id="result">等待输入…</div>
   <div class="hist" id="hist"></div>
   <div class="legend">
     <span class="lg" style="background:#27ae60"></span>8公里内：建议接，免运费（绿色圈）<br>
     <span class="lg" style="background:#f39c12"></span>8~12公里：走廊沿线免运费；不沿线加收8元运费（橙色带）<br>
     <span class="lg" style="background:#c0392b"></span>12公里以上：客户自付全额跑腿费才接<br>
-    <span class="lg" style="background:#2980b9"></span>现有客户参考点
+    <span class="lg" style="background:#2980b9"></span>现有客户参考点<br>
+    ⏰ 时间窗：午 11:30~12:30 / 晚 17:30~18:30；两餐合送不加钱；窗外特殊时段加收10元
   </div>
   <details class="mgmt">
     <summary>⚙️ 客户管理（<span id="cnum"></span> 家）</summary>
@@ -67,6 +78,7 @@ var ORIGIN = [104.0342, 30.5514];
 var ROAD_K = 1.35;          // 直线→实际道路距离的换算系数
 var GREEN_KM = 8, YELLOW_KM = 12, LATERAL_KM = 2.5;
 var OFF_CORRIDOR_FEE = 8;   // 8~12公里不在走廊沿线时向客户加收的运费
+var SPECIAL_TIME_FEE = 10;  // 标准时间窗之外的特殊时段加收
 
 // ===== 两条顺路走廊（按现有客户点位连成）=====
 var CORRIDORS = [
@@ -149,20 +161,33 @@ function distToCorridor(p){
   });
   return {d:best, name:name};
 }
+// ===== 时间窗说明（附加在判断结果后面）=====
+function timeNote(){
+  var sel=document.getElementById('mealtime');
+  var v=sel?sel.value:'lunch';
+  if(v==='lunch') return '<br>⏰ 午餐标准窗（11:30~12:30），不加钱';
+  if(v==='dinner') return '<br>⏰ 晚餐标准窗（17:30~18:30），不加钱';
+  if(v==='both') return '<br>🍱 两餐合送：中午一趟送两份，放前台/冰箱客户晚上自取——只算一趟配送，不加钱';
+  return '<br>⏰ 特殊时段（标准窗外，午11:30~12:30 / 晚17:30~18:30）：首选劝客户改标准窗+放前台冰箱（不加钱）；坚持现送则加收 '+SPECIAL_TIME_FEE+' 元/单，且该时段当天可能只有这一单＝单独跑一趟';
+}
+function timeLabel(){
+  var sel=document.getElementById('mealtime');
+  return sel?sel.options[sel.selectedIndex].text.replace(/^\S+\s*/,''):'午餐';
+}
 function judge(p){
   var road = km(ORIGIN,p)*ROAD_K;
   var fee = 7 + 2*road;
   if(road<=GREEN_KM) return {t:'ok', road:road, fee:fee,
-    msg:'✅ 建议接：距出餐点约 '+road.toFixed(1)+' 公里，免运费（你承担骑手费约 '+fee.toFixed(0)+' 元）'};
+    msg:'✅ 建议接：距出餐点约 '+road.toFixed(1)+' 公里，免运费（你承担骑手费约 '+fee.toFixed(0)+' 元）'+timeNote()};
   var cor = distToCorridor(p);
   if(road<=YELLOW_KM){
     if(cor.d*ROAD_K<=LATERAL_KM) return {t:'mid', road:road, fee:fee,
-      msg:'✅ 可接（免运费）：在'+cor.name+'沿线，约 '+road.toFixed(1)+' 公里，你承担骑手费约 '+fee.toFixed(0)+' 元。建议跟同方向订单拼一车送'};
+      msg:'✅ 可接（免运费）：在'+cor.name+'沿线，约 '+road.toFixed(1)+' 公里，你承担骑手费约 '+fee.toFixed(0)+' 元。建议跟同方向订单拼一车送'+timeNote()};
     return {t:'mid', road:road, fee:fee,
-      msg:'✅ 可接：约 '+road.toFixed(1)+' 公里，不在走廊沿线，建议向客户加收运费 '+OFF_CORRIDOR_FEE+' 元（你承担骑手费约 '+fee.toFixed(0)+' 元）'};
+      msg:'✅ 可接：约 '+road.toFixed(1)+' 公里，不在走廊沿线，建议向客户加收运费 '+OFF_CORRIDOR_FEE+' 元（你承担骑手费约 '+fee.toFixed(0)+' 元）'+timeNote()};
   }
   return {t:'bad', road:road, fee:fee,
-    msg:'💰 实报实销：约 '+road.toFixed(1)+' 公里，客户需自付全额跑腿费约 '+fee.toFixed(0)+' 元（你 0 承担）；客户不愿出就不接'};
+    msg:'💰 实报实销：约 '+road.toFixed(1)+' 公里，客户需自付全额跑腿费约 '+fee.toFixed(0)+' 元（你 0 承担）；客户不愿出就不接'+timeNote()};
 }
 
 var map = new AMap.Map('map',{zoom:12,center:[104.07,30.58],viewMode:'2D'});
@@ -291,7 +316,7 @@ function done(loc, label){
   if(r.t!=='bad'){ planRoute(p); } else if(routeLine){ map.remove(routeLine); routeLine=null; }
   var h=document.getElementById('hist');
   var d=document.createElement('div');
-  d.innerHTML='<span style="color:'+(r.t==='ok'?'#1e8e3e':r.t==='mid'?'#b26a00':'#c0392b')+'">'+(r.t==='ok'?'✅':r.t==='mid'?'⚠️':'❌')+'</span> '+label+'（'+r.road.toFixed(1)+'km）';
+  d.innerHTML='<span style="color:'+(r.t==='ok'?'#1e8e3e':r.t==='mid'?'#b26a00':'#c0392b')+'">'+(r.t==='ok'?'✅':r.t==='mid'?'⚠️':'❌')+'</span> '+label+'（'+r.road.toFixed(1)+'km · '+timeLabel()+'）';
   h.insertBefore(d,h.firstChild);
 }
 function setResult(html){document.getElementById('result').innerHTML=html;}

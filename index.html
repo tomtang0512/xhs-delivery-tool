@@ -39,9 +39,9 @@
   <div id="result">等待输入…</div>
   <div class="hist" id="hist"></div>
   <div class="legend">
-    <span class="lg" style="background:#27ae60"></span>8公里内：建议接（绿色圈）<br>
-    <span class="lg" style="background:#f39c12"></span>走廊沿线8~12公里：顺路可接（橙色带）<br>
-    <span class="lg" style="background:#c0392b"></span>圈外且不顺路：不建议接<br>
+    <span class="lg" style="background:#27ae60"></span>8公里内：建议接，免运费（绿色圈）<br>
+    <span class="lg" style="background:#f39c12"></span>8~12公里：可接，暂免运费，沿线拼一车更省（橙色带）<br>
+    <span class="lg" style="background:#c0392b"></span>12公里以上：客户自付全额跑腿费才接<br>
     <span class="lg" style="background:#2980b9"></span>现有客户参考点
   </div>
   <details class="mgmt">
@@ -152,12 +152,16 @@ function judge(p){
   var road = km(ORIGIN,p)*ROAD_K;
   var fee = 7 + 2*road;
   if(road<=GREEN_KM) return {t:'ok', road:road, fee:fee,
-    msg:'✅ 建议接：距出餐点约 '+road.toFixed(1)+' 公里，骑手费约 '+fee.toFixed(0)+' 元'};
+    msg:'✅ 建议接：距出餐点约 '+road.toFixed(1)+' 公里，免运费（你承担骑手费约 '+fee.toFixed(0)+' 元）'};
   var cor = distToCorridor(p);
-  if(road<=YELLOW_KM && cor.d*ROAD_K<=LATERAL_KM) return {t:'mid', road:road, fee:fee,
-    msg:'⚠️ 顺路可接：在'+cor.name+'沿线（偏离约 '+(cor.d*ROAD_K).toFixed(1)+' 公里），约 '+road.toFixed(1)+' 公里，骑手费约 '+fee.toFixed(0)+' 元。建议跟同方向订单拼一车送'};
+  if(road<=YELLOW_KM){
+    if(cor.d*ROAD_K<=LATERAL_KM) return {t:'mid', road:road, fee:fee,
+      msg:'✅ 可接（暂免运费）：在'+cor.name+'沿线，约 '+road.toFixed(1)+' 公里，你承担骑手费约 '+fee.toFixed(0)+' 元。建议跟同方向订单拼一车送'};
+    return {t:'mid', road:road, fee:fee,
+      msg:'✅ 可接（暂免运费）：约 '+road.toFixed(1)+' 公里，你承担骑手费约 '+fee.toFixed(0)+' 元（不在走廊沿线，暂无拼车对象）'};
+  }
   return {t:'bad', road:road, fee:fee,
-    msg:'❌ 不建议接：约 '+road.toFixed(1)+' 公里，超出范围且不顺路，骑手费约 '+fee.toFixed(0)+' 元（占餐价比例太高）'};
+    msg:'💰 实报实销：约 '+road.toFixed(1)+' 公里，客户需自付全额跑腿费约 '+fee.toFixed(0)+' 元（你 0 承担）；客户不愿出就不接'};
 }
 
 var map = new AMap.Map('map',{zoom:12,center:[104.07,30.58],viewMode:'2D'});

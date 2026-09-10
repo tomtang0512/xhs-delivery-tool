@@ -29,6 +29,7 @@
   .ctime.tl{background:#27ae60}.ctime.td{background:#8e44ad}.ctime.tb{background:#e67e22}
   .addrow select{border:1px solid #ccc;border-radius:6px;padding:4px 6px;font-size:12px}
   .citem .cb{cursor:pointer;color:#c0392b;padding:0 4px}
+  .citem .ce{cursor:pointer;color:#2980b9;padding:0 4px}
   .addrow{display:flex;gap:6px;margin-top:6px}
   .addrow button{border:1px solid #ccc;background:#f7f7f7;border-radius:6px;padding:4px 8px;font-size:12px;cursor:pointer}
   .addrow input{border:1px solid #ccc;border-radius:6px;padding:4px 6px;font-size:12px}
@@ -142,7 +143,7 @@ function renderClist(){
     var d=document.createElement('div'); d.className='citem';
     var show = k.name + (k.addr ? ' <span style="color:#999">· '+k.addr+'</span>' : '');
     var tag = '<span class="ctime '+timeClass(k.t)+'" title="点击切换习惯时段（接龙参考用）" data-t="'+i+'">'+(TIME_MAP[k.t]||'—')+'</span>';
-    d.innerHTML='<span title="'+(k.addr||k.name)+'" style="overflow:hidden;white-space:nowrap;text-overflow:ellipsis">'+show+'</span><span>'+tag+'<span class="cb" title="删除" data-i="'+i+'">✖</span></span>';
+    d.innerHTML='<span title="'+(k.addr||k.name)+'" style="overflow:hidden;white-space:nowrap;text-overflow:ellipsis">'+show+'</span><span>'+tag+'<span class="ce" title="编辑名字/地址" data-e="'+i+'">✏️</span><span class="cb" title="删除" data-i="'+i+'">✖</span></span>';
     el.appendChild(d);
   });
   document.getElementById('cnum').textContent = customers.length;
@@ -357,6 +358,40 @@ document.getElementById('clist').addEventListener('click',function(e){
   var i2=+t.getAttribute('data-i');
   if(!confirm('删除客户「'+customers[i2].name+'」？')) return;
   customers.splice(i2,1); saveCust(); renderCustomers(); renderClist();
+});
+// 编辑客户：点✏️改名/改地址（改地址自动重新定位）
+document.getElementById('clist').addEventListener('click',function(e){
+  var t=e.target;
+  if(!t.classList.contains('ce')) return;
+  var i=+t.getAttribute('data-e');
+  var c=customers[i];
+  var nm=prompt('修改客户名称：', c.name||'');
+  if(nm===null) return;
+  var ad=prompt('修改地址（不改就点取消）：\n'+(c.addr||''), c.addr||'');
+  if(ad===null) ad=c.addr||'';
+  nm=nm.trim(); ad=ad.trim();
+  if(nm) c.name=nm;
+  if(ad && ad!==(c.addr||'')){
+    var url='https://restapi.amap.com/v3/geocode/geo?key='+KEY+'&address='+encodeURIComponent(ad)+'&city='+encodeURIComponent('成都')+'&citylimit=true&output=JSON';
+    getJSON(url).then(function(j){
+      if(j.status==='1'&&j.geocodes&&j.geocodes.length){
+        var g=j.geocodes[0].location.split(',');
+        return {lng:+g[0],lat:+g[1]};
+      }
+      var url2='https://restapi.amap.com/v3/place/text?key='+KEY+'&keywords='+encodeURIComponent(ad)+'&city='+encodeURIComponent('成都')+'&citylimit=true&output=JSON';
+      return getJSON(url2).then(function(j2){
+        if(j2.status==='1'&&j2.pois&&j2.pois.length){
+          var p=j2.pois[0], q=p.location.split(',');
+          return {lng:+q[0],lat:+q[1]};
+        }
+        return null;
+      });
+    }).then(function(r){
+      if(!r){ alert('新地址没定位到，只改了名字，地址保持不变'); }
+      else { c.addr=ad; c.lng=r.lng; c.lat=r.lat; }
+      saveCust(); renderCustomers(); renderClist();
+    }).catch(function(){ alert('定位失败，只改了名字，地址保持不变'); saveCust(); renderClist(); });
+  } else { saveCust(); renderClist(); }
 });
 document.getElementById('cadd').onclick=function(){
   var a=document.getElementById('cname').value.trim();

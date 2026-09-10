@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>小红书接单范围判断工具</title>
+<style>
+  html,body{margin:0;height:100%;font-family:"Microsoft YaHei",sans-serif}
+  #map{width:100%;height:100%}
+  .panel{position:absolute;top:12px;left:12px;z-index:999;background:#fff;border-radius:10px;
+    box-shadow:0 2px 12px rgba(0,0,0,.25);padding:14px 16px;width:330px;max-width:calc(100vw - 24px)}
+  .panel h3{margin:0 0 8px;font-size:15px;color:#c0392b}
+  .row{display:flex;gap:8px}
+  #addr{flex:1;border:1px solid #ccc;border-radius:6px;padding:7px 9px;font-size:14px}
+  #btn{background:#c0392b;color:#fff;border:0;border-radius:6px;padding:7px 14px;font-size:14px;cursor:pointer}
+  #result{margin-top:10px;font-size:14px;line-height:1.6;min-height:20px}
+  .ok{color:#1e8e3e}.mid{color:#b26a00}.bad{color:#c0392b}
+  .legend{margin-top:10px;font-size:12px;color:#555;line-height:1.8;border-top:1px dashed #ddd;padding-top:8px}
+  .lg{display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:5px;vertical-align:-1px}
+  .hist{margin-top:8px;font-size:12px;color:#666;max-height:110px;overflow:auto}
+  .hist div{padding:2px 0;border-bottom:1px dashed #eee;cursor:default}
+  .mgmt{margin-top:8px;font-size:13px}
+  .mgmt summary{cursor:pointer;color:#555}
+  .clist{max-height:150px;overflow:auto;margin:6px 0;border:1px solid #eee;border-radius:6px}
+  .citem{display:flex;justify-content:space-between;padding:3px 8px;border-bottom:1px dashed #eee;font-size:12px}
+  .citem .cb{cursor:pointer;color:#c0392b;padding:0 4px}
+  .addrow{display:flex;gap:6px;margin-top:6px}
+  .addrow button{border:1px solid #ccc;background:#f7f7f7;border-radius:6px;padding:4px 8px;font-size:12px;cursor:pointer}
+  .addrow input{border:1px solid #ccc;border-radius:6px;padding:4px 6px;font-size:12px}
+</style>
+</head>
+<body>
+<div class="panel">
+  <h3>小红书接单范围判断</h3>
+  <div class="row">
+    <input id="addr" placeholder="输入客户地址，如：天府三街199号">
+    <button id="btn">判断</button>
+  </div>
+  <div id="result">等待输入…</div>
+  <div class="hist" id="hist"></div>
+  <div class="legend">
+    <span class="lg" style="background:#27ae60"></span>8公里内：建议接（绿色圈）<br>
+    <span class="lg" style="background:#f39c12"></span>走廊沿线8~12公里：顺路可接（橙色带）<br>
+    <span class="lg" style="background:#c0392b"></span>圈外且不顺路：不建议接<br>
+    <span class="lg" style="background:#2980b9"></span>现有客户参考点
+  </div>
+  <details class="mgmt">
+    <summary>⚙️ 客户管理（<span id="cnum"></span> 家）</summary>
+    <div id="clist" class="clist"></div>
+    <div class="addrow">
+      <input id="cname" placeholder="客户名" style="width:70px">
+      <input id="caddr" placeholder="地址，如：天府三街199号" style="flex:1">
+      <button id="cadd">添加</button>
+    </div>
+    <div class="addrow">
+      <button id="cmap">📍 在地图上点选添加</button>
+      <button id="creset">恢复默认客户</button>
+    </div>
+  </details>
+</div>
+<div id="map"></div>
+<script src="https://webapi.amap.com/maps?v=1.4.15&key=e9973067b859c02990c6b19729ffdce7"></script>
+<script>
+window.onerror=function(msg,src,line,col){window.lastErr=msg+' @'+line+':'+col;return false;};
+// ===== 出餐点（由两份配送表的"地址坐标×公里数"反推拟合，误差约±0.6km）=====
+var ORIGIN = [104.0342, 30.5514];
+var ROAD_K = 1.35;          // 直线→实际道路距离的换算系数
+var GREEN_KM = 8, YELLOW_KM = 12, LATERAL_KM = 2.5;
+
+// ===== 两条顺路走廊（按现有客户点位连成）=====
+var CORRIDORS = [
+  { name:'南走廊', path:[[104.0342,30.5514],[104.0712,30.5412],[104.1081,30.5225],[104.1098,30.5196]] },
+  { name:'北走廊', path:[[104.0342,30.5514],[104.0471,30.5578],[104.0682,30.5525],[104.0722,30.5782],[104.0636,30.5895],[104.0627,30.5951]] }
+];
+
+// ===== 老客户（可管理，保存在浏览器里）=====
+var DEFAULT_CUSTOMERS = [
+  {name:'凯旋南城B座',addr:'凯旋南城B座1608室',lng:104.04713,lat:30.557808},{name:'天祥广场',addr:'东方希望天祥广场A栋',lng:104.068159,lat:30.552534},{name:'大源国际中心',addr:'大源国际中心1期3栋',lng:104.067933,lat:30.547598},
+  {name:'天府软件园D3',addr:'天府五街天府软件园D3栋',lng:104.071199,lat:30.541204},{name:'嘉煜金融科技中心',addr:'高新区名都路166号',lng:104.072244,lat:30.578208},{name:'晶科一号',addr:'武侯区天晖路360号',lng:104.063597,lat:30.589506},
+  {name:'理想中心',addr:'武侯区天益街38号',lng:104.062733,lat:30.595063},{name:'卓锦荟',addr:'双流区和祥二街卓锦荟',lng:104.108061,lat:30.522502},{name:'创新中心E栋',addr:'双流区新加坡创新中心E栋',lng:104.109836,lat:30.519588},
+  {name:'川大望江东门',addr:'四川大学望江校区东门',lng:104.083932,lat:30.630838},{name:'华润玖熹府',addr:'成华区双桥路',lng:104.112952,lat:30.645863},{name:'曹家巷恒大雅苑',addr:'曹家巷恒大雅苑2栋',lng:104.087614,lat:30.673923},
+  {name:'世茂茂立方',addr:'成华区保和街道世茂茂立方',lng:104.145314,lat:30.661217},{name:'国机西南大厦',addr:'成华区航天路50号',lng:104.174825,lat:30.688108}
+];
+function loadCust(){
+  try{
+    var s=JSON.parse(localStorage.getItem('customers'));
+    if(Array.isArray(s)&&s.length){
+      // 老数据补地址：同名默认客户自动补上地址信息
+      s.forEach(function(e){
+        if(!e.addr){
+          var d=DEFAULT_CUSTOMERS.filter(function(x){return x.name===e.name;})[0];
+          if(d) e.addr=d.addr;
+        }
+      });
+      return s;
+    }
+  }catch(e){}
+  return DEFAULT_CUSTOMERS.slice();
+}
+function saveCust(){ try{ localStorage.setItem('customers', JSON.stringify(customers)); }catch(e){} }
+var customers = loadCust();
+var custMarkers = [];
+function renderCustomers(){
+  custMarkers.forEach(function(m){ map.remove(m); }); custMarkers = [];
+  customers.forEach(function(k){
+    custMarkers.push(new AMap.CircleMarker({center:[k.lng,k.lat],radius:5,fillColor:'#2980b9',fillOpacity:.85,
+      strokeColor:'#fff',strokeWeight:1,map:map}));
+    custMarkers.push(new AMap.Text({text:k.name,position:[k.lng,k.lat],anchor:'top-center',map:map,
+      style:{'font-size':'11px','color':'#2980b9','background':'rgba(255,255,255,.7)','border':'none'}}));
+  });
+  document.getElementById('cnum').textContent = customers.length;
+}
+function renderClist(){
+  var el = document.getElementById('clist'); el.innerHTML='';
+  customers.forEach(function(k,i){
+    var d=document.createElement('div'); d.className='citem';
+    var show = k.name + (k.addr ? ' <span style="color:#999">· '+k.addr+'</span>' : '');
+    d.innerHTML='<span title="'+(k.addr||k.name)+'" style="overflow:hidden;white-space:nowrap;text-overflow:ellipsis">'+show+'</span><span class="cb" title="删除" data-i="'+i+'">✖</span>';
+    el.appendChild(d);
+  });
+  document.getElementById('cnum').textContent = customers.length;
+}
+
+var R = 6371;
+function hav(a,b){
+  var p1=a[1]*Math.PI/180,p2=b[1]*Math.PI/180;
+  var h=Math.sin((p2-p1)/2)**2+Math.cos(p1)*Math.cos(p2)*Math.sin((b[0]-a[0])*Math.PI/360)**2;
+  return 2*R*Math.asin(Math.sqrt(h));
+}
+function km(p,q){ return hav(p,q); }
+// 点到线段最近距离（公里，直线）
+function distToSeg(p,a,b){
+  var ax=a[0],ay=a[1],bx=b[0],by=b[1],px=p[0],py=p[1];
+  var dx=bx-ax,dy=by-ay;
+  var L2=dx*dx+dy*dy;
+  var t=L2?Math.max(0,Math.min(1,((px-ax)*dx+(py-ay)*dy)/L2)):0;
+  var cx=ax+t*dx, cy=ay+t*dy;
+  return hav(p,[cx,cy]);
+}
+function distToCorridor(p){
+  var best=999, name='';
+  CORRIDORS.forEach(function(c){
+    var pts=c.path.map(function(pt){return [pt.lng!==undefined?pt.lng:pt[0], pt.lat!==undefined?pt.lat:pt[1]];});
+    for(var i=0;i<pts.length-1;i++){
+      var d=distToSeg(p,pts[i],pts[i+1]);
+      if(d<best){best=d;name=c.name;}
+    }
+  });
+  return {d:best, name:name};
+}
+function judge(p){
+  var road = km(ORIGIN,p)*ROAD_K;
+  var fee = 7 + 2*road;
+  if(road<=GREEN_KM) return {t:'ok', road:road, fee:fee,
+    msg:'✅ 建议接：距出餐点约 '+road.toFixed(1)+' 公里，骑手费约 '+fee.toFixed(0)+' 元'};
+  var cor = distToCorridor(p);
+  if(road<=YELLOW_KM && cor.d*ROAD_K<=LATERAL_KM) return {t:'mid', road:road, fee:fee,
+    msg:'⚠️ 顺路可接：在'+cor.name+'沿线（偏离约 '+(cor.d*ROAD_K).toFixed(1)+' 公里），约 '+road.toFixed(1)+' 公里，骑手费约 '+fee.toFixed(0)+' 元。建议跟同方向订单拼一车送'};
+  return {t:'bad', road:road, fee:fee,
+    msg:'❌ 不建议接：约 '+road.toFixed(1)+' 公里，超出范围且不顺路，骑手费约 '+fee.toFixed(0)+' 元（占餐价比例太高）'};
+}
+
+var map = new AMap.Map('map',{zoom:12,center:[104.07,30.58],viewMode:'2D'});
+// 圆圈
+new AMap.Circle({center:ORIGIN,radius:GREEN_KM*1000,strokeColor:'#27ae60',strokeWeight:2,strokeOpacity:.9,
+  fillColor:'#27ae60',fillOpacity:.08,map:map});
+new AMap.Circle({center:ORIGIN,radius:YELLOW_KM*1000,strokeColor:'#f39c12',strokeWeight:2,strokeStyle:'dashed',
+  fillColor:'#f39c12',fillOpacity:.05,map:map});
+// 走廊线
+CORRIDORS.forEach(function(c){
+  new AMap.Polyline({path:c.path,strokeColor:'#f39c12',strokeWeight:5,strokeOpacity:.7,map:map,
+    showDir:true});
+});
+// 出餐点
+new AMap.Marker({position:ORIGIN,map:map,content:'<div style="background:#c0392b;color:#fff;padding:3px 10px;border-radius:12px;font-size:12px;white-space:nowrap">🍳 出餐点</div>',anchor:'center',zIndex:200});
+// 老客户（可管理）
+renderCustomers(); renderClist();
+map.setFitView(null,false,[80,80,80,80]);
+
+var KEY='e9973067b859c02990c6b19729ffdce7';
+var markers = [];
+
+// 带重试的 GET：网络抖动/DNS失败自动重试；返回非JSON（如错误网页）时明确报错
+function getJSON(url, retries){
+  retries = retries===undefined ? 2 : retries;
+  return fetch(url).then(function(r){
+    return r.text().then(function(t){
+      var t2 = t.trim();
+      if(t2.charAt(0) !== '{' && t2.charAt(0) !== '['){
+        throw new Error('net');   // 返回的是网页而非数据，按网络问题处理
+      }
+      return JSON.parse(t2);
+    });
+  }).catch(function(e){
+    if(retries > 0){
+      return new Promise(function(res){ setTimeout(res, 800); }).then(function(){
+        return getJSON(url, retries-1);
+      });
+    }
+    throw (e.message==='net') ? new Error('查询失败：网络或高德服务暂时不可用，请稍后再试') : e;
+  });
+}
+
+function locate(text){
+  setResult('查询中…');
+  // 本地缓存：同一地址不重复请求
+  var cache = {};
+  try{ cache = JSON.parse(localStorage.getItem('geoCache')||'{}'); }catch(e){ cache={}; }
+  if(cache[text]){ done(cache[text].loc, cache[text].label); return; }
+
+  var url = 'https://restapi.amap.com/v3/geocode/geo?key='+KEY+'&address='+encodeURIComponent(text)+'&city='+encodeURIComponent('成都')+'&citylimit=true&output=JSON';
+  getJSON(url).then(function(j){
+    if(j.status==='1' && j.geocodes && j.geocodes.length){
+      var g=j.geocodes[0];
+      return {lng:+g.location.split(',')[0],lat:+g.location.split(',')[1], label:g.formatted_address};
+    }
+    // 兜底：POI 搜索
+    var url2 = 'https://restapi.amap.com/v3/place/text?key='+KEY+'&keywords='+encodeURIComponent(text)+'&city='+encodeURIComponent('成都')+'&citylimit=true&output=JSON';
+    return getJSON(url2).then(function(j2){
+      if(j2.status==='1' && j2.pois && j2.pois.length){
+        var p=j2.pois[0];
+        return {lng:+p.location.split(',')[0],lat:+p.location.split(',')[1],
+                label:p.name+(p.address?'（'+p.address+'）':'')};
+      }
+      return null;
+    });
+  }).then(function(r){
+    if(!r){ setResult('<span class="bad">没找到这个地址，换个写法试试（加上"成都市"或写清楚街道门牌）</span>'); return; }
+    try{
+      cache[text]={loc:{lng:r.lng,lat:r.lat},label:r.label};
+      localStorage.setItem('geoCache', JSON.stringify(cache));
+    }catch(e){}
+    done({lng:r.lng,lat:r.lat}, r.label);
+  }).catch(function(e){
+    setResult('<span class="bad">'+(e.message||'查询出错')+'</span>');
+  });
+}
+var routeLine = null;
+function planRoute(p){
+  if(routeLine){ map.remove(routeLine); routeLine = null; }
+  var roadP = km(ORIGIN,p)*ROAD_K;
+  // 挑顺路老客户：离"出餐点→新客户"连线不超过2公里（折算后），且比新客户近（在途中）
+  var cand = customers.filter(function(k){
+    var kp=[k.lng,k.lat];
+    var off = distToSeg(kp, ORIGIN, p)*ROAD_K;
+    var roadK = km(ORIGIN,kp)*ROAD_K;
+    return off<=1.5 && roadK < roadP*0.98;
+  }).map(function(k){return {name:k.name, pos:k.lng+','+k.lat, d:km(ORIGIN,[k.lng,k.lat])*ROAD_K};})
+    .sort(function(a,b){return a.d-b.d;}).slice(0,8);
+  var wps = cand.map(function(c){return c.pos;}).join(';');
+  var url = 'https://restapi.amap.com/v3/direction/driving?key='+KEY+'&origin='+ORIGIN.join(',')+'&destination='+p.join(',')+(wps?'&waypoints='+wps:'')+'&output=JSON&extensions=base';
+  getJSON(url).then(function(j){
+    if(!(j.status==='1' && j.route && j.route.paths && j.route.paths.length)) return;
+    var path = j.route.paths[0];
+    var distKm = path.distance/1000;
+    var pts = [];
+    path.steps.forEach(function(s){
+      s.polyline.split(';').forEach(function(q){
+        var xy=q.split(',');
+        if(xy.length===2) pts.push([+xy[0],+xy[1]]);
+      });
+    });
+    if(pts.length>1){
+      routeLine = new AMap.Polyline({path:pts, strokeColor:'#8e44ad', strokeWeight:6,
+        strokeOpacity:.85, showDir:true, map:map, zIndex:150});
+    }
+    var stopsTxt = cand.length ? cand.map(function(c){return c.name;}).join(' → ')+' → <b>新客户</b>' : '出餐点 → <b>新客户</b>（途中没有可拼的老客户）';
+    var alone = 7 + 2*roadP;
+    var van = 30 + 3*Math.max(0, distKm-5);
+    var extra = (cand.length? '，途经老客户：'+cand.length+' 家' : '');
+    setResult(document.getElementById('result').innerHTML +
+      '<br><span style="color:#8e44ad">🗺 顺路路线：'+stopsTxt+'<br>全程约 '+distKm.toFixed(1)+' 公里'+extra+
+      '｜这单单独叫骑手约 '+alone.toFixed(0)+' 元；整趟拼车（货拉拉）约 '+van.toFixed(0)+' 元</span>');
+  }).catch(function(){ /* 路线规划失败不影响判断 */ });
+}
+function done(loc, label){
+  var p=[loc.lng,loc.lat];
+  var r = judge(p);
+  var m = new AMap.Marker({position:p,map:map,
+    content:'<div style="width:16px;height:16px;border-radius:50%;background:'+(r.t==='ok'?'#1e8e3e':r.t==='mid'?'#e67e22':'#c0392b')+';border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)"></div>',
+    anchor:'center',zIndex:300});
+  new AMap.InfoWindow({content:'<b>'+label+'</b><br>'+r.msg,offset:new AMap.Pixel(0,-14)}).open(map,p);
+  markers.push(m);
+  map.setFitView(markers.slice(-5),false,[100,100,320,100]);
+  setResult(r.t==='ok'?'<span class="ok">'+r.msg+'</span>':r.t==='mid'?'<span class="mid">'+r.msg+'</span>':'<span class="bad">'+r.msg+'</span>');
+  if(r.t!=='bad'){ planRoute(p); } else if(routeLine){ map.remove(routeLine); routeLine=null; }
+  var h=document.getElementById('hist');
+  var d=document.createElement('div');
+  d.innerHTML='<span style="color:'+(r.t==='ok'?'#1e8e3e':r.t==='mid'?'#b26a00':'#c0392b')+'">'+(r.t==='ok'?'✅':r.t==='mid'?'⚠️':'❌')+'</span> '+label+'（'+r.road.toFixed(1)+'km）';
+  h.insertBefore(d,h.firstChild);
+}
+function setResult(html){document.getElementById('result').innerHTML=html;}
+document.getElementById('btn').onclick=function(){
+  var v=document.getElementById('addr').value.trim();
+  if(v) locate(v);
+};
+document.getElementById('addr').addEventListener('keydown',function(e){
+  if(e.key==='Enter') document.getElementById('btn').click();
+});
+
+// ===== 客户管理 =====
+document.getElementById('clist').addEventListener('click',function(e){
+  var t=e.target;
+  if(!t.classList.contains('cb')) return;
+  var i=+t.getAttribute('data-i');
+  if(!confirm('删除客户「'+customers[i].name+'」？')) return;
+  customers.splice(i,1); saveCust(); renderCustomers(); renderClist();
+});
+document.getElementById('cadd').onclick=function(){
+  var a=document.getElementById('cname').value.trim();
+  var b=document.getElementById('caddr').value.trim();
+  if(!a && !b){ alert('请先填客户名或地址'); return; }
+  // 智能拆分：把"名称 地址"写在一个框里也能拆开
+  var name, addr;
+  if(a && b){ name=a; addr=b; }
+  else {
+    var s = a || b;
+    var m = s.split(/^\s*(\S+)\s+(.+)$/);
+    if(m && m[2]){ name=m[1]; addr=m[2]; }
+    else { name=s.slice(0,10); addr=s; }
+  }
+  var url='https://restapi.amap.com/v3/geocode/geo?key='+KEY+'&address='+encodeURIComponent(addr)+'&city='+encodeURIComponent('成都')+'&citylimit=true&output=JSON';
+  getJSON(url).then(function(j){
+    if(j.status==='1'&&j.geocodes&&j.geocodes.length){
+      var g=j.geocodes[0].location.split(',');
+      return {lng:+g[0],lat:+g[1],label:j.geocodes[0].formatted_address};
+    }
+    var url2='https://restapi.amap.com/v3/place/text?key='+KEY+'&keywords='+encodeURIComponent(addr)+'&city='+encodeURIComponent('成都')+'&citylimit=true&output=JSON';
+    return getJSON(url2).then(function(j2){
+      if(j2.status==='1'&&j2.pois&&j2.pois.length){
+        var p=j2.pois[0], q=p.location.split(',');
+        return {lng:+q[0],lat:+q[1],label:p.name};
+      }
+      return null;
+    });
+  }).then(function(r){
+    if(!r){ alert('没找到这个地址，换个写法试试'); return; }
+    customers.push({name:name,addr:addr,lng:r.lng,lat:r.lat});
+    saveCust(); renderCustomers(); renderClist();
+    document.getElementById('cname').value=''; document.getElementById('caddr').value='';
+    var h=document.getElementById('hist');
+    var d=document.createElement('div');
+    d.innerHTML='<span style="color:#2980b9">➕</span> 已添加客户「'+name+' · '+addr+'」（'+r.label+'）';
+    h.insertBefore(d,h.firstChild);
+  }).catch(function(e){ alert(e.message||'添加失败，请重试'); });
+};
+var picking=false;
+document.getElementById('cmap').onclick=function(){
+  picking=!picking;
+  this.textContent = picking ? '点选中：在地图上点一下位置（再点取消）' : '📍 在地图上点选添加';
+};
+map.on('click',function(e){
+  if(!picking) return;
+  picking=false; document.getElementById('cmap').textContent='📍 在地图上点选添加';
+  var ll=e.lnglat;
+  getJSON('https://restapi.amap.com/v3/geocode/regeo?key='+KEY+'&location='+ll.getLng()+','+ll.getLat()+'&output=JSON')
+  .then(function(j){
+    var name=(j.regeocode&&j.regeocode.formatted_address)||('新客户'+(customers.length+1));
+    var nm=prompt('客户名称：', name.replace(/^四川省?成都市?/,'').slice(0,12));
+    if(nm===null) return;
+    customers.push({name:(nm||('新客户'+(customers.length+1))),addr:name.replace(/^四川省?成都市?/,''),lng:ll.getLng(),lat:ll.getLat()});
+    saveCust(); renderCustomers(); renderClist();
+  }).catch(function(){ alert('获取位置名称失败，请重试'); });
+});
+document.getElementById('creset').onclick=function(){
+  if(!confirm('恢复为内置的默认客户列表？当前自定义列表会被覆盖。')) return;
+  customers=DEFAULT_CUSTOMERS.slice(); saveCust(); renderCustomers(); renderClist();
+};
+</script>
+</body>
+</html>

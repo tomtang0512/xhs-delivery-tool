@@ -40,7 +40,7 @@
   <div class="hist" id="hist"></div>
   <div class="legend">
     <span class="lg" style="background:#27ae60"></span>8公里内：建议接，免运费（绿色圈）<br>
-    <span class="lg" style="background:#f39c12"></span>8~12公里：可接，暂免运费，沿线拼一车更省（橙色带）<br>
+    <span class="lg" style="background:#f39c12"></span>8~12公里：走廊沿线免运费；不沿线加收8元运费（橙色带）<br>
     <span class="lg" style="background:#c0392b"></span>12公里以上：客户自付全额跑腿费才接<br>
     <span class="lg" style="background:#2980b9"></span>现有客户参考点
   </div>
@@ -66,6 +66,7 @@ window.onerror=function(msg,src,line,col){window.lastErr=msg+' @'+line+':'+col;r
 var ORIGIN = [104.0342, 30.5514];
 var ROAD_K = 1.35;          // 直线→实际道路距离的换算系数
 var GREEN_KM = 8, YELLOW_KM = 12, LATERAL_KM = 2.5;
+var OFF_CORRIDOR_FEE = 8;   // 8~12公里不在走廊沿线时向客户加收的运费
 
 // ===== 两条顺路走廊（按现有客户点位连成）=====
 var CORRIDORS = [
@@ -156,9 +157,9 @@ function judge(p){
   var cor = distToCorridor(p);
   if(road<=YELLOW_KM){
     if(cor.d*ROAD_K<=LATERAL_KM) return {t:'mid', road:road, fee:fee,
-      msg:'✅ 可接（暂免运费）：在'+cor.name+'沿线，约 '+road.toFixed(1)+' 公里，你承担骑手费约 '+fee.toFixed(0)+' 元。建议跟同方向订单拼一车送'};
+      msg:'✅ 可接（免运费）：在'+cor.name+'沿线，约 '+road.toFixed(1)+' 公里，你承担骑手费约 '+fee.toFixed(0)+' 元。建议跟同方向订单拼一车送'};
     return {t:'mid', road:road, fee:fee,
-      msg:'✅ 可接（暂免运费）：约 '+road.toFixed(1)+' 公里，你承担骑手费约 '+fee.toFixed(0)+' 元（不在走廊沿线，暂无拼车对象）'};
+      msg:'✅ 可接：约 '+road.toFixed(1)+' 公里，不在走廊沿线，建议向客户加收运费 '+OFF_CORRIDOR_FEE+' 元（你承担骑手费约 '+fee.toFixed(0)+' 元）'};
   }
   return {t:'bad', road:road, fee:fee,
     msg:'💰 实报实销：约 '+road.toFixed(1)+' 公里，客户需自付全额跑腿费约 '+fee.toFixed(0)+' 元（你 0 承担）；客户不愿出就不接'};

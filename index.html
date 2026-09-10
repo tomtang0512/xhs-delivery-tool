@@ -104,8 +104,8 @@
 <script src="https://webapi.amap.com/maps?v=1.4.15&key=e9973067b859c02990c6b19729ffdce7"></script>
 <script>
 window.onerror=function(msg,src,line,col){window.lastErr=msg+' @'+line+':'+col;return false;};
-// ===== 出餐点（由两份配送表的"地址坐标×公里数"反推拟合，误差约±0.6km）=====
-var ORIGIN=[104.0475,30.5575];  // 2026-09 用9.3~9.9两周数据重新拟合的出餐点
+ // ===== 出餐点（真实店址坐标，不会漂移）=====
+var ORIGIN=[104.045634,30.557046];  // 真实出餐点：高新区荣华北路69号3栋2层（高德实测坐标）
 var ROAD_K = 1.35;          // 直线→实际道路距离的换算系数
 var GREEN_KM = 8, YELLOW_KM = 12, LATERAL_KM = 2.5;
 var OFF_CORRIDOR_FEE = 8;   // 8~12公里不在走廊沿线时向客户加收的运费

@@ -30,6 +30,9 @@
   .addrow select{border:1px solid #ccc;border-radius:6px;padding:4px 6px;font-size:12px}
   .citem .cb{cursor:pointer;color:#c0392b;padding:0 4px}
   .citem .ce{cursor:pointer;color:#2980b9;padding:0 4px}
+  .cbx{margin-right:6px;flex:none}
+  #bulkbox{margin-top:6px}
+  #bulkbox textarea{width:100%;box-sizing:border-box;height:90px;border:1px solid #ccc;border-radius:6px;font-size:12px;padding:6px}
   .addrow{display:flex;gap:6px;margin-top:6px}
   .addrow button{border:1px solid #ccc;background:#f7f7f7;border-radius:6px;padding:4px 8px;font-size:12px;cursor:pointer}
   .addrow input{border:1px solid #ccc;border-radius:6px;padding:4px 6px;font-size:12px}
@@ -78,6 +81,22 @@
     <div class="addrow">
       <button id="cmap">📍 在地图上点选添加</button>
       <button id="creset">恢复默认客户</button>
+    </div>
+    <div class="addrow">
+      <button id="cball">全选</button>
+      <button id="cbdel">删除选中(0)</button>
+      <select id="cbt" style="flex:1">
+        <option value="">时段改为：不固定</option>
+        <option value="l">时段改为：午餐</option>
+        <option value="d">时段改为：晚餐</option>
+        <option value="b">时段改为：午+晚</option>
+      </select>
+      <button id="cbtset">应用</button>
+    </div>
+    <div class="addrow"><button id="cbulk" style="flex:1">📋 批量添加（粘贴多行名单）</button></div>
+    <div id="bulkbox" style="display:none">
+      <textarea id="bta" placeholder="每行一个客户：名称 地址（逗号/顿号/空格分隔均可）&#10;例：&#10;张三 天府三街199号&#10;李四，凯旋南城B座1608室&#10;王五、软件园D3"></textarea>
+      <div class="addrow"><button id="bgo">开始导入</button><button id="bcancel">收起</button></div>
     </div>
   </details>
 </div>
@@ -143,10 +162,17 @@ function renderClist(){
     var d=document.createElement('div'); d.className='citem';
     var show = k.name + (k.addr ? ' <span style="color:#999">· '+k.addr+'</span>' : '');
     var tag = '<span class="ctime '+timeClass(k.t)+'" title="点击切换习惯时段（接龙参考用）" data-t="'+i+'">'+(TIME_MAP[k.t]||'—')+'</span>';
-    d.innerHTML='<span title="'+(k.addr||k.name)+'" style="overflow:hidden;white-space:nowrap;text-overflow:ellipsis">'+show+'</span><span>'+tag+'<span class="ce" title="编辑名字/地址" data-e="'+i+'">✏️</span><span class="cb" title="删除" data-i="'+i+'">✖</span></span>';
+    d.innerHTML='<input type="checkbox" class="cbx" data-c="'+i+'"><span title="'+(k.addr||k.name)+'" style="flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">'+show+'</span><span>'+tag+'<span class="ce" title="编辑名字/地址" data-e="'+i+'">✏️</span><span class="cb" title="删除" data-i="'+i+'">✖</span></span>';
     el.appendChild(d);
   });
   document.getElementById('cnum').textContent = customers.length;
+  updateBatchNum();
+}
+function selIdx(){
+  return [].map.call(document.querySelectorAll('#clist .cbx:checked'),function(x){return +x.getAttribute('data-c');});
+}
+function updateBatchNum(){
+  document.getElementById('cbdel').textContent='删除选中('+selIdx().length+')';
 }
 
 var R = 6371;
@@ -393,6 +419,92 @@ document.getElementById('clist').addEventListener('click',function(e){
     }).catch(function(){ alert('定位失败，只改了名字，地址保持不变'); saveCust(); renderClist(); });
   } else { saveCust(); renderClist(); }
 });
+// 批量：勾选变化时更新按钮数字
+document.getElementById('clist').addEventListener('change',function(e){
+  if(e.target.classList && e.target.classList.contains('cbx')) updateBatchNum();
+});
+// 批量：全选/全不选
+document.getElementById('cball').onclick=function(){
+  var boxes=document.querySelectorAll('#clist .cbx');
+  var all = boxes.length && [].every.call(boxes,function(b){return b.checked;});
+  [].forEach.call(boxes,function(b){ b.checked = !all; });
+  this.textContent = all ? '全选' : '全不选';
+  updateBatchNum();
+};
+// 批量：删除选中
+document.getElementById('cbdel').onclick=function(){
+  var idx=selIdx();
+  if(!idx.length){ alert('先勾选要删除的客户'); return; }
+  if(!confirm('确定删除选中的 '+idx.length+' 家客户？')) return;
+  customers=customers.filter(function(_,i){ return idx.indexOf(i)<0; });
+  saveCust(); renderCustomers(); renderClist();
+};
+// 批量：统一改习惯时段
+document.getElementById('cbtset').onclick=function(){
+  var idx=selIdx();
+  if(!idx.length){ alert('先勾选要修改的客户'); return; }
+  var tv=document.getElementById('cbt').value;
+  idx.forEach(function(i){ customers[i].t=tv; });
+  saveCust(); renderClist();
+  alert('已把 '+idx.length+' 家客户的习惯时段改为「'+(TIME_MAP[tv]||'不固定')+'」');
+};
+// 批量：粘贴多行添加
+function geoOnce(addr){
+  var url='https://restapi.amap.com/v3/geocode/geo?key='+KEY+'&address='+encodeURIComponent(addr)+'&city='+encodeURIComponent('成都')+'&citylimit=true&output=JSON';
+  return getJSON(url).then(function(j){
+    if(j.status==='1'&&j.geocodes&&j.geocodes.length){
+      var g=j.geocodes[0].location.split(',');
+      return {lng:+g[0],lat:+g[1]};
+    }
+    var url2='https://restapi.amap.com/v3/place/text?key='+KEY+'&keywords='+encodeURIComponent(addr)+'&city='+encodeURIComponent('成都')+'&citylimit=true&output=JSON';
+    return getJSON(url2).then(function(j2){
+      if(j2.status==='1'&&j2.pois&&j2.pois.length){
+        var p=j2.pois[0], q=p.location.split(',');
+        return {lng:+q[0],lat:+q[1]};
+      }
+      return null;
+    });
+  });
+}
+function parseLine(line){
+  var m=line.match(/^([^，,、\t]+)[，,、\t]+(.+)$/);
+  if(m) return [m[1].trim(), m[2].trim()];
+  var i=line.search(/\s/);
+  if(i>0) return [line.slice(0,i), line.slice(i).trim()];
+  return [line, line];
+}
+document.getElementById('cbulk').onclick=function(){
+  var b=document.getElementById('bulkbox');
+  b.style.display = b.style.display==='none' ? 'block' : 'none';
+  this.textContent = b.style.display==='none' ? '📋 批量添加（粘贴多行名单）' : '收起批量添加';
+};
+document.getElementById('bcancel').onclick=function(){
+  document.getElementById('bulkbox').style.display='none';
+  document.getElementById('cbulk').textContent='📋 批量添加（粘贴多行名单）';
+};
+document.getElementById('bgo').onclick=function(){
+  var lines=document.getElementById('bta').value.split(/\r?\n/).map(function(s){return s.trim();}).filter(Boolean);
+  if(!lines.length){ alert('先粘贴客户名单，每行一个：名称 地址'); return; }
+  var btn=this; btn.disabled=true;
+  var ok=0, fail=[], idx=0;
+  function next(){
+    if(idx>=lines.length){
+      btn.disabled=false; btn.textContent='开始导入';
+      saveCust(); renderCustomers(); renderClist();
+      document.getElementById('bta').value='';
+      alert('导入完成：成功 '+ok+' 家'+(fail.length ? '，失败 '+fail.length+' 家（没定位到）：'+fail.join('、') : ''));
+      return;
+    }
+    btn.textContent='导入中 '+(idx+1)+'/'+lines.length;
+    var pr=parseLine(lines[idx]);
+    geoOnce(pr[1]).then(function(r){
+      if(r){ customers.push({name:pr[0],addr:pr[1],lng:r.lng,lat:r.lat,t:''}); ok++; }
+      else fail.push(pr[0]);
+      idx++; setTimeout(next,250);
+    }).catch(function(){ fail.push(pr[0]); idx++; setTimeout(next,250); });
+  }
+  next();
+};
 document.getElementById('cadd').onclick=function(){
   var a=document.getElementById('cname').value.trim();
   var b=document.getElementById('caddr').value.trim();

@@ -348,12 +348,14 @@ function planRoute(p){
 var alone = 7 + 2*roadP;
 var extra = (cand.length? '，途经老客户：'+cand.length+' 家' : '');
 var mins = Math.round(distKm*2.2 + (cand.length+1)*5);
+var van = cand.length ? Math.max(10.9, 1.32*distKm) : Math.max(10.9, 7.7+1.07*distKm);  // 按2026-09-10实测报价拟合：直送3单+一拖N 4站15.82元
+var vanNote = cand.length ? '一拖N拼车（货拉拉实测价）约 '+van.toFixed(0)+' 元，比逐单叫骑手省 '+Math.round((1-van/(alone*(cand.length+1)))*100)+'%' : '货拉拉直送（实测价）约 '+van.toFixed(0)+' 元';
 var timeNote2 = mins>55
   ? '<br>⚠️ <b>超时预警：这趟预计 '+mins+' 分钟，超过午窗60分钟，装不下！</b>建议：拆成两趟、或把部分点位挪到另一窗/加班车、或向造成绕路的新客户加收费用'
   : '<br>✅ 预计用时约 '+mins+' 分钟（车程×2.2分/公里+每停5分钟），午窗60分钟内跑得完';
 setResult(document.getElementById('result').innerHTML +
 '<br><span style="color:#8e44ad">🗺 顺路路线：'+stopsTxt+'<br>全程约 '+distKm.toFixed(1)+' 公里'+extra+
-'｜这单单独叫骑手约 '+alone.toFixed(0)+' 元'+timeNote2+'</span>');
+'｜这单单独叫骑手约 '+alone.toFixed(0)+' 元；'+vanNote+timeNote2+'</span>');
   }).catch(function(){ /* 路线规划失败不影响判断 */ });
 }
 function done(loc, label){

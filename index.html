@@ -194,17 +194,6 @@ function distToSeg(p,a,b){
   var cx=ax+t*dx, cy=ay+t*dy;
   return hav(p,[cx,cy]);
 }
-function distToCorridor(p){
-  var best=999, name='';
-  CORRIDORS.forEach(function(c){
-    var pts=c.path.map(function(pt){return [pt.lng!==undefined?pt.lng:pt[0], pt.lat!==undefined?pt.lat:pt[1]];});
-    for(var i=0;i<pts.length-1;i++){
-      var d=distToSeg(p,pts[i],pts[i+1]);
-      if(d<best){best=d;name=c.name;}
-    }
-  });
-  return {d:best, name:name};
-}
 // ===== 真实路网距离：调高德驾车路线（电动车实际走的机动车/非机动车混行路网，驾车路线最接近）=====
 // 拿不到路线时回退：直线×ROAD_K，approx=true
 function routeDistance(p, cb){

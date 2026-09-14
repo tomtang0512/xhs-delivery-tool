@@ -56,11 +56,9 @@
   <div id="result">等待输入…</div>
   <div class="hist" id="hist"></div>
   <div class="legend">
-    <span class="lg" style="background:#27ae60"></span>8公里内：建议接，免运费（绿色圈）<br>
-    <span class="lg" style="background:#f39c12"></span>8~12公里：走廊沿线免运费；不沿线加收8元运费（虚线圈）<br>
-<span class="lg" style="background:#d35400"></span>🚌 南走廊（出餐点→软件园D3→卓锦荟→创新中心）<br>
-<span class="lg" style="background:#0e8c74"></span>🚌 北走廊（出餐点→天祥→嘉煜→晶科→理想中心）<br>
-    <span class="lg" style="background:#c0392b"></span>12公里以上：客户自付全额跑腿费才接<br>
+    <span class="lg" style="background:#27ae60"></span>实际路程≤9公里：建议接，免运费（判定以路网距离为准，圆圈仅为直线参考）<br>
+    <span class="lg" style="background:#f39c12"></span>实际路程9~14公里：顺路（绕路率≤15%，能顺带经过老客户方向）免运费；不顺路加收8元运费<br>
+    <span class="lg" style="background:#c0392b"></span>14公里以上：客户自付全额跑腿费才接<br>
     <span class="lg" style="background:#2980b9"></span>现有客户参考点<br>
     ⏰ 时间窗：午 11:30~12:30 / 晚 17:30~18:30；两餐合送不加钱；窗外特殊时段加收10元<br>
     🕐 一趟车的时间预算：车程分钟数≈公里数×2.2 + 停靠点×5；总用时超55分钟必须拆趟，走廊不能无限加长
@@ -109,8 +107,10 @@
 window.onerror=function(msg,src,line,col){window.lastErr=msg+' @'+line+':'+col;return false;};
  // ===== 出餐点（真实店址坐标，不会漂移）=====
 var ORIGIN=[104.045634,30.557046];  // 真实出餐点：高新区荣华北路69号3栋2层（高德实测坐标）
-var ROAD_K = 1.35;          // 直线→实际道路距离的换算系数
-var GREEN_KM = 8, YELLOW_KM = 12, LATERAL_KM = 2.5;
+var ROAD_K = 1.35;          // 直线→实际道路距离的换算系数（仅在路网距离获取失败时作回退估算）
+var GREEN_KM = 9, YELLOW_KM = 14;  // 2026-09-14改用真实路网距离判定后重新标定（原8/12是直线×1.35口径，路网距离普遍大10~25%，回归验证14家现有客户判定一致）
+var LATERAL_KM = 2.5;       // 兼容保留：已改用绕路率判定，不再使用
+var DETOUR_K = 1.15;        // 走廊顺路判定：绕路率≤15%视为沿线（代替原直线垂距2.5km）
 var OFF_CORRIDOR_FEE = 8;   // 8~12公里不在走廊沿线时向客户加收的运费
 var SPECIAL_TIME_FEE = 10;  // 标准时间窗之外的特殊时段加收
 
@@ -205,6 +205,42 @@ function distToCorridor(p){
   });
   return {d:best, name:name};
 }
+// ===== 真实路网距离：调高德驾车路线（电动车实际走的机动车/非机动车混行路网，驾车路线最接近）=====
+// 拿不到路线时回退：直线×ROAD_K，approx=true
+function routeDistance(p, cb){
+  var fallback = km(ORIGIN,p)*ROAD_K;
+  var url = 'https://restapi.amap.com/v3/direction/driving?key='+KEY+'&origin='+ORIGIN.join(',')+'&destination='+p.join(',')+'&output=JSON&extensions=base&strategy=2';
+  getJSON(url).then(function(j){
+    if(j.status==='1' && j.route && j.route.paths && j.route.paths.length){
+      cb(parseFloat(j.route.paths[0].distance)/1000, false);
+    }else{
+      cb(fallback, true);
+    }
+  }).catch(function(){ cb(fallback, true); });
+}
+// ===== 走廊判定：新客户是否顺路（基于真实路网而非直线）=====
+// 思路：对每个「顺路方向锚点」（比新客户近的老客户），计算 出餐点→途经锚点→新客户 的真实路线距离，
+// 与直送新客户的真实路线距离相比，绕路率≤DETOUR_K 视为在走廊沿线。
+function corridorVia(p, directRoad, cb){
+  var anchors = customers.filter(function(k){
+    var dA = km(ORIGIN,[k.lng,k.lat]);
+    return dA > 0.3 && dA < km(ORIGIN,p)*1.05;
+  }).map(function(k){return {name:k.name, pos:[k.lng,k.lat]};});
+  if(!anchors.length){ cb(null); return; }
+  var best=null, remaining=anchors.length, finished=false;
+  function fin(){ if(!finished){ finished=true; cb(best); } }
+  anchors.forEach(function(a){
+    var viaUrl = 'https://restapi.amap.com/v3/direction/driving?key='+KEY+'&origin='+ORIGIN.join(',')+'&destination='+p.join(',')+'&waypoints='+a.pos.join(',')+'&output=JSON&extensions=base&strategy=2';
+    getJSON(viaUrl).then(function(j){
+      if(j.status==='1' && j.route && j.route.paths && j.route.paths.length){
+        var via = parseFloat(j.route.paths[0].distance)/1000;
+        var detour = via/Math.max(directRoad,0.1);
+        if(!best || detour<best.detour) best={name:a.name, detour:detour, via:via};
+      }
+      if(--remaining===0) fin();
+    }).catch(function(){ if(--remaining===0) fin(); });
+  });
+}
 // ===== 时间窗说明（附加在判断结果后面）=====
 function timeNote(){
   var sel=document.getElementById('mealtime');
@@ -218,20 +254,17 @@ function timeLabel(){
   var sel=document.getElementById('mealtime');
   return sel?sel.options[sel.selectedIndex].text.replace(/^\S+\s*/,''):'午餐';
 }
-function judge(p){
-  var road = km(ORIGIN,p)*ROAD_K;
+function judge(p, road, approx){
   var fee = 7 + 2*road;
+  var src = approx ? '（路网距离获取失败，按直线×1.35估算）' : '（实际路网距离）';
   if(road<=GREEN_KM) return {t:'ok', road:road, fee:fee,
-    msg:'✅ 建议接：距出餐点约 '+road.toFixed(1)+' 公里，免运费（你承担骑手费约 '+fee.toFixed(0)+' 元）'+timeNote()};
-  var cor = distToCorridor(p);
+    msg:'✅ 建议接：实际路程约 '+road.toFixed(1)+' 公里'+src+'，免运费（你承担骑手费约 '+fee.toFixed(0)+' 元）'+timeNote()};
   if(road<=YELLOW_KM){
-    if(cor.d*ROAD_K<=LATERAL_KM) return {t:'mid', road:road, fee:fee,
-      msg:'✅ 可接（免运费）：在'+cor.name+'沿线，约 '+road.toFixed(1)+' 公里，你承担骑手费约 '+fee.toFixed(0)+' 元。建议跟同方向订单拼一车送'+timeNote()};
-    return {t:'mid', road:road, fee:fee,
-      msg:'✅ 可接：约 '+road.toFixed(1)+' 公里，不在走廊沿线，建议向客户加收运费 '+OFF_CORRIDOR_FEE+' 元（你承担骑手费约 '+fee.toFixed(0)+' 元）'+timeNote()};
+    return {t:'mid', road:road, fee:fee, needCorridor:true,
+      msg:'✅ 可接：实际路程约 '+road.toFixed(1)+' 公里'+src+'，你承担骑手费约 '+fee.toFixed(0)+' 元。走廊判定中…'+timeNote()};
   }
   return {t:'bad', road:road, fee:fee,
-    msg:'💰 实报实销：约 '+road.toFixed(1)+' 公里，客户需自付全额跑腿费约 '+fee.toFixed(0)+' 元（你 0 承担）；客户不愿出就不接'+timeNote()};
+    msg:'💰 实报实销：实际路程约 '+road.toFixed(1)+' 公里'+src+'，客户需自付全额跑腿费约 '+fee.toFixed(0)+' 元（你 0 承担）；客户不愿出就不接'+timeNote()};
 }
 
 var map = new AMap.Map('map',{zoom:12,center:[104.07,30.58],viewMode:'2D'});
@@ -240,11 +273,11 @@ new AMap.Circle({center:ORIGIN,radius:GREEN_KM*1000,strokeColor:'#27ae60',stroke
   fillColor:'#27ae60',fillOpacity:.08,map:map});
 new AMap.Circle({center:ORIGIN,radius:YELLOW_KM*1000,strokeColor:'#f39c12',strokeWeight:2,strokeStyle:'dashed',
   fillColor:'#f39c12',fillOpacity:.05,map:map});
-// 走廊线
+// 走廊线：保留显示作参考（顺路判定已改为真实路网绕路率，不再依赖这两条直线）
 CORRIDORS.forEach(function(c){
   var col = c.name.indexOf('南')>-1 ? '#d35400' : '#0e8c74';
   new AMap.Polyline({path:c.path,strokeColor:'#ffffff',strokeWeight:11,strokeOpacity:.9,map:map});
-  new AMap.Polyline({path:c.path,strokeColor:col,strokeWeight:7,strokeOpacity:1,map:map,
+  new AMap.Polyline({path:c.path,strokeColor:col,strokeWeight:5,strokeOpacity:.55,map:map,
     showDir:true});
 });
 new AMap.Text({text:'🚌 南走廊',position:[104.0900,30.5315],anchor:'center',map:map,
@@ -360,19 +393,40 @@ setResult(document.getElementById('result').innerHTML +
 }
 function done(loc, label){
   var p=[loc.lng,loc.lat];
-  var r = judge(p);
-  var m = new AMap.Marker({position:p,map:map,
-    content:'<div style="width:16px;height:16px;border-radius:50%;background:'+(r.t==='ok'?'#1e8e3e':r.t==='mid'?'#e67e22':'#c0392b')+';border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)"></div>',
+  var m0 = new AMap.Marker({position:p,map:map,
+    content:'<div style="width:16px;height:16px;border-radius:50%;background:#95a5a6;border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)"></div>',
     anchor:'center',zIndex:300});
-  new AMap.InfoWindow({content:'<b>'+label+'</b><br>'+r.msg,offset:new AMap.Pixel(0,-14)}).open(map,p);
-  markers.push(m);
-  map.setFitView(markers.slice(-5),false,[100,100,320,100]);
-  setResult(r.t==='ok'?'<span class="ok">'+r.msg+'</span>':r.t==='mid'?'<span class="mid">'+r.msg+'</span>':'<span class="bad">'+r.msg+'</span>');
-  if(r.t!=='bad'){ planRoute(p); } else if(routeLine){ map.remove(routeLine); routeLine=null; }
-  var h=document.getElementById('hist');
-  var d=document.createElement('div');
-  d.innerHTML='<span style="color:'+(r.t==='ok'?'#1e8e3e':r.t==='mid'?'#b26a00':'#c0392b')+'">'+(r.t==='ok'?'✅':r.t==='mid'?'⚠️':'❌')+'</span> '+label+'（'+r.road.toFixed(1)+'km · '+timeLabel()+'）';
-  h.insertBefore(d,h.firstChild);
+  markers.push(m0);
+  setResult('⏳ 正在计算实际路网距离…');
+  routeDistance(p, function(road, approx){
+    var r = judge(p, road, approx);
+    m0.setContent('<div style="width:16px;height:16px;border-radius:50%;background:'+(r.t==='ok'?'#1e8e3e':r.t==='mid'?'#e67e22':'#c0392b')+';border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)"></div>');
+    var finish = function(finalMsg){
+      new AMap.InfoWindow({content:'<b>'+label+'</b><br>'+finalMsg,offset:new AMap.Pixel(0,-14)}).open(map,p);
+      setResult(finalMsg.indexOf('✅')===0?'<span class="ok">'+finalMsg+'</span>':finalMsg.indexOf('✅')===1||finalMsg.indexOf('可接')>-1&&finalMsg.indexOf('加收')<0?'<span class="mid">'+finalMsg+'</span>':finalMsg.indexOf('💰')===0?'<span class="bad">'+finalMsg+'</span>':'<span class="mid">'+finalMsg+'</span>');
+      var h=document.getElementById('hist');
+      var d=document.createElement('div');
+      var cls = finalMsg.indexOf('加收')>-1 ? '#b26a00' : (r.t==='ok'?'#1e8e3e':r.t==='mid'?'#b26a00':'#c0392b');
+      var icon = finalMsg.indexOf('建议接')>-1?'✅':finalMsg.indexOf('加收')>-1?'⚠️':r.t==='mid'?'✅':r.t==='mid'?'⚠️':'❌';
+      d.innerHTML='<span style="color:'+cls+'">'+icon+'</span> '+label+'（'+r.road.toFixed(1)+'km · '+timeLabel()+'）';
+      h.insertBefore(d,h.firstChild);
+      if(r.t!=='bad'){ planRoute(p); } else if(routeLine){ map.remove(routeLine); routeLine=null; }
+    };
+    if(r.t==='mid' && r.needCorridor){
+      // 8~12km：走廊判定改为基于真实路网顺路度
+      corridorVia(p, road, function(best){
+        if(best && best.detour<=DETOUR_K){
+          r.msg = '✅ 可接（免运费）：实际路程约 '+road.toFixed(1)+' 公里'+(approx?'（直线×1.35估算）':'（实际路网距离）')+'，途经'+best.name+'方向顺路（绕路率仅 '+Math.round((best.detour-1)*100)+'%），建议跟同方向订单拼一车送'+timeNote();
+        }else{
+          var dInfo = best ? '，最顺路方向'+best.name+'也要多绕 '+Math.round((best.detour-1)*100)+'%' : '，附近没有顺路的老客户方向';
+          r.msg = '✅ 可接：实际路程约 '+road.toFixed(1)+' 公里'+(approx?'（直线×1.35估算）':'（实际路网距离）')+dInfo+'，不在顺路走廊沿线，建议向客户加收运费 '+OFF_CORRIDOR_FEE+' 元（你承担骑手费约 '+r.fee.toFixed(0)+' 元）'+timeNote();
+        }
+        finish(r.msg);
+      });
+    }else{
+      finish(r.msg);
+    }
+  });
 }
 function setResult(html){document.getElementById('result').innerHTML=html;}
 document.getElementById('btn').onclick=function(){

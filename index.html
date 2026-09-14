@@ -224,7 +224,7 @@ function corridorVia(p, directRoad, cb){
       if(j.status==='1' && j.route && j.route.paths && j.route.paths.length){
         var via = parseFloat(j.route.paths[0].distance)/1000;
         var detour = via/Math.max(directRoad,0.1);
-        if(!best || detour<best.detour) best={name:a.name, detour:detour, via:via};
+        if(!best || detour<best.detour) best={name:a.name, pos:a.pos, detour:detour, via:via};
       }
       if(--remaining===0) fin();
     }).catch(function(){ if(--remaining===0) fin(); });
@@ -338,17 +338,19 @@ function locate(text){
   });
 }
 var routeLine = null;
-function planRoute(p){
+function planRoute(p, viaAnchor){
   if(routeLine){ map.remove(routeLine); routeLine = null; }
   var roadP = km(ORIGIN,p)*ROAD_K;
-  // 挑顺路老客户：离"出餐点→新客户"连线不超过2公里（折算后），且比新客户近（在途中）
-  var cand = customers.filter(function(k){
-    var kp=[k.lng,k.lat];
-    var off = distToSeg(kp, ORIGIN, p)*ROAD_K;
-    var roadK = km(ORIGIN,kp)*ROAD_K;
-    return off<=1.5 && roadK < roadP*0.98;
-  }).map(function(k){return {name:k.name, pos:k.lng+','+k.lat, d:km(ORIGIN,[k.lng,k.lat])*ROAD_K};})
-    .sort(function(a,b){return a.d-b.d;}).slice(0,8);
+  // 顺路锚点：走廊判定已找到顺路方向时直接用它；否则按老逻辑（直线偏离筛老客户）
+  var cand = viaAnchor
+    ? [{name:viaAnchor.name, pos:viaAnchor.pos.join(','), d:km(ORIGIN,viaAnchor.pos)}]
+    : customers.filter(function(k){
+        var kp=[k.lng,k.lat];
+        var off = distToSeg(kp, ORIGIN, p)*ROAD_K;
+        var roadK = km(ORIGIN,kp)*ROAD_K;
+        return off<=1.5 && roadK < roadP*0.98;
+      }).map(function(k){return {name:k.name, pos:k.lng+','+k.lat, d:km(ORIGIN,[k.lng,k.lat])*ROAD_K};})
+        .sort(function(a,b){return a.d-b.d;}).slice(0,8);
   var wps = cand.map(function(c){return c.pos;}).join(';');
   var url = 'https://restapi.amap.com/v3/direction/driving?key='+KEY+'&origin='+ORIGIN.join(',')+'&destination='+p.join(',')+(wps?'&waypoints='+wps:'')+'&output=JSON&extensions=base';
   getJSON(url).then(function(j){
@@ -402,18 +404,23 @@ function done(loc, label){
       if(r.t!=='bad'){ planRoute(p); } else if(routeLine){ map.remove(routeLine); routeLine=null; }
     };
     if(r.t==='mid' && r.needCorridor){
-      // 8~12km：走廊判定改为基于真实路网顺路度
+      // 9~14km：走廊判定改为基于真实路网顺路度
       corridorVia(p, road, function(best){
+        var viaAnchor = null;
         if(best && best.detour<=DETOUR_K){
+          viaAnchor = {name:best.name, pos:best.pos};
           r.msg = '✅ 可接（免运费）：实际路程约 '+road.toFixed(1)+' 公里'+(approx?'（直线×1.35估算）':'（实际路网距离）')+'，途经'+best.name+'方向顺路（绕路率仅 '+Math.round((best.detour-1)*100)+'%），建议跟同方向订单拼一车送'+timeNote();
         }else{
           var dInfo = best ? '，最顺路方向'+best.name+'也要多绕 '+Math.round((best.detour-1)*100)+'%' : '，附近没有顺路的老客户方向';
           r.msg = '✅ 可接：实际路程约 '+road.toFixed(1)+' 公里'+(approx?'（直线×1.35估算）':'（实际路网距离）')+dInfo+'，不在顺路走廊沿线，建议向客户加收运费 '+OFF_CORRIDOR_FEE+' 元（你承担骑手费约 '+r.fee.toFixed(0)+' 元）'+timeNote();
         }
         finish(r.msg);
+        // 判定完成后直接画顺路路线（带顺路锚点）
+        if(r.t!=='bad'){ planRoute(p, viaAnchor); } else if(routeLine){ map.remove(routeLine); routeLine=null; }
       });
     }else{
       finish(r.msg);
+      if(r.t!=='bad'){ planRoute(p, null); } else if(routeLine){ map.remove(routeLine); routeLine=null; }
     }
   });
 }

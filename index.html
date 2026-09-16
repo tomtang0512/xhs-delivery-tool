@@ -40,6 +40,7 @@
   .gitem label{display:flex;align-items:center;flex:1;min-width:0;cursor:pointer}
   .ctag{cursor:pointer;border-radius:4px;padding:0 4px;margin-left:4px;white-space:nowrap;color:#fff;background:#95a5a6;font-size:11px;flex:none}
   .ctag.cd.on{background:#27ae60}
+  .ctag.cm{background:#8e44ad}
   .ctag.cx.easy{background:#27ae60}
   .ctag.cx.normal{background:#95a5a6}
   .ctag.cx.hard{background:#c0392b}
@@ -72,7 +73,7 @@
     <span class="lg" style="background:#2980b9"></span>现有客户参考点<br>
     ⏰ 时间窗：午 11:30~12:30 / 晚 17:30~18:30；两餐合送不加钱；窗外特殊时段加收10元<br>
     🕐 一趟车的时间预算：车程分钟数≈公里数×2.2 + 停靠点×5；总用时超55分钟必须拆趟，走廊不能无限加长<br>
-    🏋️ 健身房固定点位（蓝标）：烁屿/荟创在南走廊沿线，可与小红书南线班车拼同一趟车，趟费按餐数分摊
+    🏋️ 健身房4店（乐刻/青度/烁屿/荟创）已并入客户档案，与散单统一排线；烁屿/荟创在南走廊沿线，可顺路并车
   </div>
   <details class="mgmt">
     <summary>⚙️ 客户管理（<span id="cnum"></span> 家）</summary>
@@ -110,18 +111,6 @@
       <textarea id="bta" placeholder="每行一个客户：名称 地址（逗号/顿号/空格分隔均可）&#10;例：&#10;张三 天府三街199号&#10;李四，凯旋南城B座1608室&#10;王五、软件园D3"></textarea>
       <div class="addrow"><button id="bgo">开始导入</button><button id="bcancel">收起</button></div>
     </div>
-  </details>
-  <details class="mgmt">
-    <summary>🏋️ 健身房排车（B端固定点位，<span id="gynum">0</span> 家有单）</summary>
-    <div id="glist" class="clist"></div>
-    <div class="addrow">
-      <select id="gwin" style="flex:1">
-        <option value="lunch">🥗 午窗发车（11:30~12:30）</option>
-        <option value="dinner">🍗 晚窗发车（17:30~18:30）</option>
-      </select>
-      <button id="grun">🚐 排这一趟</button>
-    </div>
-    <div id="gresult" style="margin-top:8px;font-size:13px;line-height:1.7;color:#333">勾选今天有单的健身房、填餐数，点「排这一趟」自动算路线、货拉拉成本和用时。</div>
   </details>
   <details class="mgmt">
     <summary>🛵 今日排线（<span id="pnum">0</span> 个有单点）</summary>
@@ -197,6 +186,18 @@ function saveToday(){try{localStorage.setItem('todaySel',JSON.stringify({d:today
 var todaySel=loadToday();
 var CX_MIN={easy:3,normal:5,hard:8};
 var CX_TXT={easy:'简',normal:'普',hard:'难'};
+// ===== 健身房固定点位并入档案库（与散单一起统一排线，仅首次自动补入）=====
+var GYM_SEEDS=[
+  {name:'乐刻私教馆',addr:'天府二街999号世豪广场3层',lng:104.044099,lat:30.550429,meals:2},
+  {name:'青度健身（香月湖）',addr:'益州大道中段699号香月湖6幢',lng:104.058985,lat:30.555518,meals:2},
+  {name:'烁屿健身（中和）',addr:'吉龙二街246号',lng:104.089438,lat:30.535391,meals:3},
+  {name:'荟创空间233',addr:'吉龙二街430号（陆肖地铁站A口）',lng:104.095814,lat:30.535185,meals:1}
+];
+GYM_SEEDS.forEach(function(g){
+  var ex=customers.some(function(k){return k.name===g.name;});
+  if(!ex){ customers.push({name:g.name,addr:g.addr,lng:g.lng,lat:g.lat,t:'b',cx:'normal',note:'健身房固定点位',meals:g.meals}); }
+});
+saveCust();
 function renderCustomers(){
   custMarkers.forEach(function(m){ map.remove(m); }); custMarkers = [];
   customers.forEach(function(k){
@@ -216,8 +217,9 @@ function renderClist(){
     var show = k.name + (k.addr ? ' <span style="color:#999">· '+k.addr+'</span>' : '');
     var tag = '<span class="ctime '+timeClass(k.t)+'" title="点击切换习惯时段（接龙参考用）" data-t="'+i+'">'+(TIME_MAP[k.t]||'—')+'</span>';
     var dtag='<span class="ctag cd'+(todaySel.indexOf(i)>-1?' on':'')+'" title="今日有单：点击切换（绿色=参与今天排线）" data-s="'+i+'">单</span>';
+    var mtag='<span class="ctag cm" title="餐数：点击+1（到6归1），排线时统计总餐数" data-m="'+i+'">餐×'+(k.meals||1)+'</span>';
     var cxtag='<span class="ctag cx '+(k.cx||'normal')+'" title="送达复杂度：点击切换（简3分/普5分/难8分）" data-x="'+i+'">'+(CX_TXT[k.cx||'normal'])+'</span>';
-    d.innerHTML='<input type="checkbox" class="cbx" data-c="'+i+'">'+dtag+'<span title="'+(k.addr||k.name)+'" style="flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">'+show+'</span><span>'+cxtag+tag+'<span class="ce" title="编辑名字/地址/备注" data-e="'+i+'">✏️</span><span class="cb" title="删除" data-i="'+i+'">✖</span></span>';
+    d.innerHTML='<input type="checkbox" class="cbx" data-c="'+i+'">'+dtag+'<span title="'+(k.addr||k.name)+'" style="flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">'+show+'</span><span>'+mtag+cxtag+tag+'<span class="ce" title="编辑名字/地址/备注" data-e="'+i+'">✏️</span><span class="cb" title="删除" data-i="'+i+'">✖</span></span>';
     el.appendChild(d);
   });
   document.getElementById('cnum').textContent = customers.length;
@@ -438,6 +440,12 @@ document.getElementById('addr').addEventListener('keydown',function(e){
 // ===== 客户管理 =====
 document.getElementById('clist').addEventListener('click',function(e){
   var t=e.target;
+  if(t.classList.contains('cm')){
+    var i5=+t.getAttribute('data-m');
+    customers[i5].meals=((customers[i5].meals||1)%6)+1;
+    saveCust(); renderClist();
+    return;
+  }
   if(t.classList.contains('cd')){
     var i3=+t.getAttribute('data-s');
     var p=todaySel.indexOf(i3);
@@ -652,75 +660,6 @@ document.getElementById('creset').onclick=function(){
   customers=DEFAULT_CUSTOMERS.slice(); saveCust(); renderCustomers(); renderClist();
 };
 
-// ===== 健身房渠道（B端固定点位，独立排车 + 南走廊合并提示）=====
-var GYMS=[
-  {name:'乐刻私教馆',addr:'天府二街999号世豪广场3层',lng:104.044099,lat:30.550429},
-  {name:'青度健身（香月湖）',addr:'益州大道中段699号香月湖6幢',lng:104.058985,lat:30.555518},
-  {name:'烁屿健身（中和）',addr:'吉龙二街246号',lng:104.089438,lat:30.535391},
-  {name:'荟创空间233',addr:'吉龙二街430号（陆肖地铁站A口）',lng:104.095814,lat:30.535185}
-];
-var gymMeals=[2,2,2,2];
-try{ var gm=JSON.parse(localStorage.getItem('gymMeals')); if(Array.isArray(gm)&&gm.length===4) gymMeals=gm; }catch(e){}
-GYMS.forEach(function(g){
-  new AMap.Marker({position:[g.lng,g.lat],map:map,anchor:'center',zIndex:180,
-    content:'<div style="background:#2980b9;color:#fff;padding:2px 8px;border-radius:10px;font-size:11px;white-space:nowrap">🏋️ '+g.name+'</div>'});
-});
-function renderGyms(){
-  var el=document.getElementById('glist'); el.innerHTML='';
-  GYMS.forEach(function(g,i){
-    var d=document.createElement('div'); d.className='citem gitem'; d.setAttribute('data-g',i);
-    d.innerHTML='<label><input type="checkbox" class="gcx"><span style="flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis" title="'+g.addr+'">'+g.name+' <span style="color:#999">· '+(km(ORIGIN,[g.lng,g.lat])*ROAD_K).toFixed(1)+'km</span></span></label><span>餐 <input type="number" class="gnum" min="0" max="30" value="'+(gymMeals[i]||0)+'"></span>';
-    el.appendChild(d);
-  });
-  document.getElementById('gynum').textContent='0';
-}
-function saveGymMeals(){ try{ localStorage.setItem('gymMeals', JSON.stringify(gymMeals)); }catch(e){} }
-var gymRouteLine=null;
-function gset(html){ document.getElementById('gresult').innerHTML=html; }
-document.getElementById('glist').addEventListener('change',function(){
-  document.getElementById('gynum').textContent=document.querySelectorAll('#glist .gcx:checked').length;
-});
-document.getElementById('grun').onclick=function(){
-  var sel=[];
-  document.querySelectorAll('#glist .gitem').forEach(function(el){
-    var i=+el.getAttribute('data-g');
-    var n=+(el.querySelector('.gnum').value)||0;
-    gymMeals[i]=n;
-    if(el.querySelector('.gcx').checked && n>0) sel.push({name:GYMS[i].name,pos:[GYMS[i].lng,GYMS[i].lat],n:n});
-  });
-  saveGymMeals();
-  document.getElementById('gynum').textContent=document.querySelectorAll('#glist .gcx:checked').length;
-  if(!sel.length){ gset('<span class="mid">先勾选今天有单的健身房，并填好餐数（0餐视同无单）</span>'); return; }
-  // 最近邻排路：从出餐点出发，每次去最近的下一个点
-  var order=[],cur=ORIGIN,rest=sel.slice();
-  while(rest.length){
-    rest.sort(function(a,b){return km(cur,a.pos)-km(cur,b.pos);});
-    var nxt=rest.shift(); order.push(nxt); cur=nxt.pos;
-  }
-  var path=[ORIGIN].concat(order.map(function(o){return o.pos;}));
-  var rk=0; for(var i=0;i<path.length-1;i++) rk+=km(path[i],path[i+1]);
-  rk*=ROAD_K;
-  var meals=order.reduce(function(s,o){return s+o.n;},0);
-  var van=Math.max(10.9, 1.32*rk);   // 一拖N按整趟路程计价（2026-09-10实测拟合）
-  var mins=Math.round(rk*2.2+order.length*5);
-  var win=document.getElementById('gwin').value==='dinner'?'晚窗':'午窗';
-  var perMeals=meals?(van/meals):0;
-  var warn = mins>55
-    ? '<br>⚠️ <b>超时预警：预计 '+mins+' 分钟，超过60分钟窗口！建议拆两趟或把部分点位挪到另一窗。</b>'
-    : '<br>✅ 预计用时约 '+mins+' 分钟，'+win+'60分钟内跑得完（卸货按每点5分钟）';
-  var mergeNote='';
-  var zh=order.filter(function(o){return o.name.indexOf('烁屿')>-1||o.name.indexOf('荟创')>-1;}).length;
-  if(zh) mergeNote='<br>💡 烁屿/荟创都在南走廊沿线：可与小红书南线班车<b>同趟串送</b>（先卸健身房整箱货，再沿途送散单），趟费按两渠道餐数分摊';
-  gset('🚐 排车路线（'+win+'）：出餐点 → '+order.map(function(o){return o.name;}).join(' → ')
-    +'<br>全程约 <b>'+rk.toFixed(1)+' 公里</b>、'+order.length+' 个停靠点、共 '+meals+' 餐'
-    +'<br>货拉拉一拖N（按整趟路程计价）约 <b>'+van.toFixed(0)+' 元</b>，餐均约 <b>'+perMeals.toFixed(1)+' 元</b>'
-    +warn+mergeNote);
-  if(gymRouteLine){ map.remove(gymRouteLine); gymRouteLine=null; }
-  gymRouteLine=new AMap.Polyline({path:path,strokeColor:'#2980b9',strokeWeight:5,strokeOpacity:.9,
-    strokeStyle:'dashed',showDir:true,map:map,zIndex:160,bubble:true});
-};
-renderGyms();
-
 // ===== 今日排线（档案库点选 → 顺路排序 → 骑行/送达时长 → 闪送/货拉拉双参考价）=====
 var MERGE_KM=0.1;   // 直线多少公里内视为同一目的地（送达时间只算一次）
 var planParams={speed:16,prep:0,depart:'',round:false,fstart:13,fkm:3,fper:2};
@@ -776,8 +715,8 @@ document.getElementById('prun').onclick=function(){
     var k=customers[i],p=[k.lng,k.lat];
     var g=null;
     for(var gi=0;gi<groups.length;gi++){if(km(p,groups[gi].pos)<=MERGE_KM){g=groups[gi];break;}}
-    if(g){g.members.push(k);g.min=Math.max(g.min,CX_MIN[k.cx||'normal']);}
-    else groups.push({pos:p,members:[k],min:CX_MIN[k.cx||'normal']});
+    if(g){g.members.push(k);g.min=Math.max(g.min,CX_MIN[k.cx||'normal']);g.meals+=(k.meals||1);}
+    else groups.push({pos:p,members:[k],min:CX_MIN[k.cx||'normal'],meals:(k.meals||1)});
   });
   // 2) 排顺序：≤8点穷举精确解；>8点最近邻贪心+2-opt优化（目标：总距离最短）
   var n=groups.length;
@@ -836,6 +775,7 @@ document.getElementById('prun').onclick=function(){
     var rideMin=legKm.reduce(function(s,k){return s+k;},0)/planParams.speed*60;
     var delMin=groups.reduce(function(s,g){return s+g.min;},0);
     var tot=Math.round(planParams.prep+rideMin+delMin);
+    var meals=groups.reduce(function(s,g){return s+g.meals;},0)||1;
     // 闪送点对点参考价（不足1公里按1公里进位）
     var flashTxt=[],fsum=0;
     flashList.forEach(function(f,i5){
@@ -863,14 +803,15 @@ document.getElementById('prun').onclick=function(){
     var cxtxt=best.map(function(oi){return glabel(oi)+'（'+groups[oi].min+'分）';}).join('、');
     var segTxt=legs.map(function(_,i6){return stops[i6].name+'→'+stops[i6+1].name+' '+legKm[i6].toFixed(1)+'km/'+Math.round(legKm[i6]/planParams.speed*60)+'分';}).join('；');
     pset('🛵 <b>配送顺序</b>：'+stops.map(function(s2){return s2.name;}).join(' → ')
+      +'<br>📊 共 '+live.length+' 个点、<b>'+meals+' 餐</b>'
       +'<br>📦 <b>送达复杂度</b>：'+cxtxt
       +'<br>🚴 <b>分段骑行</b>：'+segTxt
       +'<br>🚴 骑行总时间：<b>'+Math.round(rideMin)+' 分钟</b>（'+planParams.speed+'km/h 实际均速）'
       +'<br>📦 送达总时间：<b>'+delMin+' 分钟</b>'
       +'<br>⏱ <b>总时长：'+tot+' 分钟</b>（含出发准备 '+planParams.prep+' 分钟）'
       +finTxt
-      +'<br>⚡ <b>闪送点对点参考</b>：'+flashTxt.join('、')+'<br>　点对点加总 <b>'+fsum+' 元</b>（仅参考，不是向客户收的配送费）'
-      +'<br>🚚 <b>货拉拉一拖N参考</b>：约 <b>'+van.toFixed(1)+' 元</b>（整趟 '+routeKm.toFixed(1)+' km，按实测价拟合，支持途经点）'
+      +'<br>⚡ <b>闪送点对点参考</b>：'+flashTxt.join('、')+'<br>　点对点加总 <b>'+fsum+' 元</b>（餐均 '+(fsum/meals).toFixed(1)+' 元/餐；仅参考，不是向客户收的配送费）'
+      +'<br>🚚 <b>货拉拉一拖N参考</b>：约 <b>'+van.toFixed(1)+' 元</b>（整趟 '+routeKm.toFixed(1)+' km，餐均约 <b>'+(van/meals).toFixed(1)+' 元/餐</b>；按实测价拟合，支持途经点）'
       +'<br>📌 同目的地合并：'+mergeTxt
       +(apiFail?'<br>⚠️ 高德API部分请求失败，失败段已按直线×1.35估算':'<br>📏 里程按高德步行路线测算（最接近电瓶车实际骑行路线），耗时按你设的均速换算'));
   });

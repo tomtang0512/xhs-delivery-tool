@@ -38,8 +38,9 @@
   .addrow input{border:1px solid #ccc;border-radius:6px;padding:4px 6px;font-size:12px}
   .gnum{width:52px;border:1px solid #ccc;border-radius:6px;padding:3px 5px;font-size:12px}
   .gitem label{display:flex;align-items:center;flex:1;min-width:0;cursor:pointer}
-  .ctag{cursor:pointer;border-radius:4px;padding:0 4px;margin-left:4px;white-space:nowrap;color:#fff;background:#95a5a6;font-size:11px;flex:none}
-  .ctag.cd.on{background:#27ae60}
+.ctag{cursor:pointer;border-radius:4px;padding:0 4px;margin-left:4px;white-space:nowrap;color:#fff;background:#95a5a6;font-size:11px;flex:none}
+.ctag.cd{background:#dfe6e9;color:#2d3436;border:1px dashed #b2bec3;font-weight:bold}
+.ctag.cd.on{background:#27ae60;color:#fff;border:1px solid #27ae60}
   .ctag.cm{background:#8e44ad}
   .ctag.cx.easy{background:#27ae60}
   .ctag.cx.normal{background:#95a5a6}
@@ -76,8 +77,9 @@
     🏋️ 健身房4店（乐刻/青度/烁屿/荟创）已并入客户档案，与散单统一排线；烁屿/荟创在南走廊沿线，可顺路并车
   </div>
   <details class="mgmt">
-    <summary>⚙️ 客户管理（<span id="cnum"></span> 家）</summary>
-    <div id="clist" class="clist"></div>
+<summary>⚙️ 客户管理（<span id="cnum"></span> 家）</summary>
+<div style="font-size:12px;color:#c0392b;margin:4px 0">左侧蓝色勾选框＝批量操作用，不算有单！要点地址旁的「有单」标签变绿，才算今天要送。</div>
+<div id="clist" class="clist"></div>
     <div class="addrow">
       <input id="cname" placeholder="客户名" style="width:70px">
       <input id="caddr" placeholder="地址，如：天府三街199号" style="flex:1">
@@ -114,7 +116,7 @@
   </details>
   <details class="mgmt">
     <summary>🛵 今日排线（<span id="pnum">0</span> 个有单点）</summary>
-    <div style="font-size:12px;color:#888;margin:4px 0">先在上方「客户管理」里点亮地址旁的绿色「单」标签＝今日有单，再回来排线。</div>
+    <div style="font-size:12px;color:#888;margin:4px 0">先在上方「客户管理」里点亮地址旁的绿色「有单」标签＝今日有单（蓝色勾选框不算），再回来排线。</div>
     <div class="addrow" style="flex-wrap:wrap;align-items:center">
       <span style="font-size:12px">速度</span><input id="pspeed" type="number" class="gnum" min="8" max="30" step="0.5">
       <span style="font-size:12px">km/h；准备</span><input id="pprep" type="number" class="gnum" min="0" max="60">
@@ -216,7 +218,7 @@ function renderClist(){
     var d=document.createElement('div'); d.className='citem';
     var show = k.name + (k.addr ? ' <span style="color:#999">· '+k.addr+'</span>' : '');
     var tag = '<span class="ctime '+timeClass(k.t)+'" title="点击切换习惯时段（接龙参考用）" data-t="'+i+'">'+(TIME_MAP[k.t]||'—')+'</span>';
-    var dtag='<span class="ctag cd'+(todaySel.indexOf(i)>-1?' on':'')+'" title="今日有单：点击切换（绿色=参与今天排线）" data-s="'+i+'">单</span>';
+    var dtag='<span class="ctag cd'+(todaySel.indexOf(i)>-1?' on':'')+'" title="今日有单：点击切换（变绿=参与今天排线；蓝色勾选框不算）" data-s="'+i+'">有单</span>';
     var mtag='<span class="ctag cm" title="餐数：点击+1（到6归1），排线时统计总餐数" data-m="'+i+'">餐×'+(k.meals||1)+'</span>';
     var cxtag='<span class="ctag cx '+(k.cx||'normal')+'" title="送达复杂度：点击切换（简3分/普5分/难8分）" data-x="'+i+'">'+(CX_TXT[k.cx||'normal'])+'</span>';
     d.innerHTML='<input type="checkbox" class="cbx" data-c="'+i+'">'+dtag+'<span title="'+(k.addr||k.name)+'" style="flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">'+show+'</span><span>'+mtag+cxtag+tag+'<span class="ce" title="编辑名字/地址/备注" data-e="'+i+'">✏️</span><span class="cb" title="删除" data-i="'+i+'">✖</span></span>';
@@ -707,7 +709,7 @@ function ridingLeg(a,b){
 function eachPerm(a,cb){(function rec(k){if(k<=1){cb(a.slice());return;}for(var i=0;i<k;i++){rec(k-1);var j=(k%2===0)?i:0;var t=a[j];a[j]=a[k-1];a[k-1]=t;}})(a.length);}
 document.getElementById('prun').onclick=function(){
   var live=todaySel.filter(function(i){return customers[i];});
-  if(!live.length){ pset('<span class="mid">今天还没有有单地址：去上方「客户管理」点地址旁的「单」标签把它点亮。</span>'); return; }
+  if(!live.length){ pset('<span class="mid">今天还没有有单地址。注意：左侧蓝色勾选框是批量操作用的，不算有单——要点地址旁的「有单」标签变绿才算。</span>'); return; }
   savePlanParams();
   // 1) 合并同一目的地：直线≤100米算同一栋楼，送达时间只算一次、取最高复杂度
   var groups=[];

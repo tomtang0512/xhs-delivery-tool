@@ -814,7 +814,8 @@ document.getElementById('prun').onclick=function(){
       +'<br>🚚 <b>货拉拉一拖N参考</b>：约 <b>'+van.toFixed(1)+' 元</b>（整趟 '+routeKm.toFixed(1)+' km，餐均约 <b>'+(van/meals).toFixed(1)+' 元/餐</b>；按实测价拟合，支持途经点）'
       +'<br>📌 同目的地合并：'+mergeTxt
       +(apiFail?'<br>⚠️ 高德API部分请求失败，失败段已按直线×1.35估算':'<br>📏 里程按高德步行路线测算（最接近电瓶车实际骑行路线），耗时按你设的均速换算'));
-  });
+  })
+  .catch(function(err){ pset('❌ 排线出错：'+(err&&err.message||err)+'<br>请刷新页面（Ctrl+F5）重试；若仍报错，把这段话截图发我。'); });
 };
 </script>
 </body>

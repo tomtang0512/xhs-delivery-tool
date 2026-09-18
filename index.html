@@ -67,14 +67,13 @@
   <div class="hist" id="hist"></div>
   <div class="legend">
     <span class="lg" style="background:#27ae60"></span>8公里内：建议接，免运费（绿色圈）<br>
-    <span class="lg" style="background:#f39c12"></span>8~12公里：走廊沿线免运费；不沿线加收8元运费（虚线圈）<br>
-<span class="lg" style="background:#d35400"></span>🚌 南走廊（出餐点→软件园D3→卓锦荟→创新中心）<br>
-<span class="lg" style="background:#0e8c74"></span>🚌 北走廊（出餐点→天祥→嘉煜→晶科→理想中心）<br>
+    <span class="lg" style="background:#f39c12"></span>8~12公里：建议向客户加收8元运费（虚线圈）<br>
+
     <span class="lg" style="background:#c0392b"></span>12公里以上：客户自付全额跑腿费才接<br>
     <span class="lg" style="background:#2980b9"></span>现有客户参考点<br>
     ⏰ 时间窗：午 11:30~12:30 / 晚 17:30~18:30；两餐合送不加钱；窗外特殊时段加收10元<br>
-    🕐 一趟车的时间预算：车程分钟数≈公里数×2.2 + 停靠点×5；总用时超55分钟必须拆趟，走廊不能无限加长<br>
-    🏋️ 健身房4店（乐刻/青度/烁屿/荟创）已并入客户档案，与散单统一排线；烁屿/荟创在南走廊沿线，可顺路并车
+    🕐 一趟车的时间预算：车程分钟数≈公里数×2.2 + 停靠点×5；总用时超55分钟必须拆趟，一趟不能无限加长<br>
+    🏋️ 健身房4店（乐刻/青度/烁屿/荟创）已并入客户档案，与散单统一排线，可按同方向顺路并车
   </div>
   <details class="mgmt">
 <summary>⚙️ 客户管理（<span id="cnum"></span> 家）</summary>
@@ -144,28 +143,24 @@ window.onerror=function(msg,src,line,col){window.lastErr=msg+' @'+line+':'+col;r
  // ===== 出餐点（真实店址坐标，不会漂移）=====
 var ORIGIN=[104.045634,30.557046];  // 真实出餐点：高新区荣华北路69号3栋2层（高德实测坐标）
 var ROAD_K = 1.35;          // 直线→实际道路距离的换算系数
-var GREEN_KM = 8, YELLOW_KM = 12, LATERAL_KM = 2.5;
-var OFF_CORRIDOR_FEE = 8;   // 8~12公里不在走廊沿线时向客户加收的运费
+var GREEN_KM = 8, YELLOW_KM = 12;
+var MID_FEE = 8;   // 8~12公里向客户加收的运费
 var SPECIAL_TIME_FEE = 10;  // 标准时间窗之外的特殊时段加收
 
-// ===== 两条顺路走廊（按现有客户点位连成）=====
-var CORRIDORS = [
-  { name:'南走廊', path:[ORIGIN,[104.0712,30.5412],[104.1081,30.5225],[104.1098,30.5196]] },
-  { name:'北走廊', path:[ORIGIN,[104.0471,30.5578],[104.0682,30.5525],[104.0722,30.5782],[104.0636,30.5895],[104.0627,30.5951]] }
-];
+
 
 // ===== 老客户（可管理，保存在浏览器里）=====
 var DEFAULT_CUSTOMERS = [
   {name:'政务服务中心',addr:'高新区政务服务中心（蕾蕾）',lng:104.057413,lat:30.552034,t:'l',meals:1,note:'蕾蕾 12:00前；荞麦面过凉水；1.9km'},
   {name:'软件园D7',addr:'天府软件园D区D7座901',lng:104.074183,lat:30.541607,t:'l',meals:1,note:'张 11:40前；餐需加热'},
   {name:'软件园D3',addr:'天府软件园D3栋马士基',lng:104.071199,lat:30.541204,t:'l',meals:2,note:'雷芸芸/Sheep 11:30 午2餐；偶尔晚18:30加餐；4.6km'},
-  {name:'晶科一号',addr:'武侯区天晖路360号晶科一号1511',lng:104.063597,lat:30.589506,t:'l',meals:1,note:'何软 11:40；北走廊沿线；5.5km'},
-  {name:'理想中心',addr:'武侯区天益街38号理想中心1栋610',lng:104.062733,lat:30.595063,t:'l',meals:1,note:'刘维一 11:30；北走廊末端；5.9km'},
+  {name:'晶科一号',addr:'武侯区天晖路360号晶科一号1511',lng:104.063597,lat:30.589506,t:'l',meals:1,note:'何软 11:40；5.5km'},
+  {name:'理想中心',addr:'武侯区天益街38号理想中心1栋610',lng:104.062733,lat:30.595063,t:'l',meals:1,note:'刘维一 11:30；5.9km'},
   {name:'中德时代星辰',addr:'中德时代星辰E区3号楼1单元2214',lng:104.079876,lat:30.522632,t:'l',meals:2,cx:'hard',note:'小王 12:00前，常一次2餐；上楼；7.7km'},
   {name:'五冶大厦',addr:'五冶大厦B区19楼',lng:104.084334,lat:30.589677,meals:1,cx:'hard',note:'赵 15:00特殊时段；出电梯打电话；7.2km'},
   {name:'桐梓林中华园',addr:'桐梓林北路6号中华园锦园9-3-A座',lng:104.06354,lat:30.617221,t:'d',meals:1,note:'袁先生 晚17:30标准窗；8.6km'},
-  {name:'卓锦荟',addr:'和祥二街卓锦荟专家公寓前台',lng:104.108061,lat:30.522502,t:'l',meals:1,cx:'easy',note:'李先生 11:30；南走廊沿线放前台；9.1km'},
-  {name:'创新中心E栋',addr:'和祥二街505号新加坡创新中心E栋7楼',lng:104.109836,lat:30.519588,t:'l',meals:1,note:'彭家俊 11:30；南走廊末端上楼；9.5km'},
+  {name:'卓锦荟',addr:'和祥二街卓锦荟专家公寓前台',lng:104.108061,lat:30.522502,t:'l',meals:1,cx:'easy',note:'李先生 11:30；放前台；9.1km'},
+  {name:'创新中心E栋',addr:'和祥二街505号新加坡创新中心E栋7楼',lng:104.109836,lat:30.519588,t:'l',meals:1,note:'彭家俊 11:30；上楼；9.5km'},
   {name:'东方希望大厦',addr:'高朋大道3号东方希望大厦B座3楼305',lng:104.041722,lat:30.625895,t:'l',meals:1,note:'小奶油 11:40；10.4km → 每单+8元'},
   {name:'交通管理学校',addr:'红牌楼佳灵路22号四川省交通管理学校外卖柜',lng:104.022847,lat:30.628773,t:'l',meals:1,cx:'easy',note:'吴 12:00前；红牌楼10.3km → 每单+8元；放外卖柜'},
   {name:'观城9栋',addr:'观城9栋1单元504',lng:104.121447,lat:30.647202,t:'l',meals:1,cx:'hard',note:'汤女士 11:15；16km ⛔不接（周复购，可集中日/自提）'},
@@ -271,17 +266,7 @@ function distToSeg(p,a,b){
   var cx=ax+t*dx, cy=ay+t*dy;
   return hav(p,[cx,cy]);
 }
-function distToCorridor(p){
-  var best=999, name='';
-  CORRIDORS.forEach(function(c){
-    var pts=c.path.map(function(pt){return [pt.lng!==undefined?pt.lng:pt[0], pt.lat!==undefined?pt.lat:pt[1]];});
-    for(var i=0;i<pts.length-1;i++){
-      var d=distToSeg(p,pts[i],pts[i+1]);
-      if(d<best){best=d;name=c.name;}
-    }
-  });
-  return {d:best, name:name};
-}
+
 // ===== 时间窗说明（附加在判断结果后面）=====
 function timeNote(){
   var sel=document.getElementById('mealtime');
@@ -300,13 +285,8 @@ function judge(p){
   var fee = 7 + 2*road;
   if(road<=GREEN_KM) return {t:'ok', road:road, fee:fee,
     msg:'✅ 建议接：距出餐点约 '+road.toFixed(1)+' 公里，免运费（你承担骑手费约 '+fee.toFixed(0)+' 元）'+timeNote()};
-  var cor = distToCorridor(p);
-  if(road<=YELLOW_KM){
-    if(cor.d*ROAD_K<=LATERAL_KM) return {t:'mid', road:road, fee:fee,
-      msg:'✅ 可接（免运费）：在'+cor.name+'沿线，约 '+road.toFixed(1)+' 公里，你承担骑手费约 '+fee.toFixed(0)+' 元。建议跟同方向订单拼一车送'+timeNote()};
-    return {t:'mid', road:road, fee:fee,
-      msg:'✅ 可接：约 '+road.toFixed(1)+' 公里，不在走廊沿线，建议向客户加收运费 '+OFF_CORRIDOR_FEE+' 元（你承担骑手费约 '+fee.toFixed(0)+' 元）'+timeNote()};
-  }
+  if(road<=YELLOW_KM) return {t:'mid', road:road, fee:fee,
+    msg:'✅ 可接：约 '+road.toFixed(1)+' 公里，建议向客户加收运费 '+MID_FEE+' 元（你承担骑手费约 '+fee.toFixed(0)+' 元）'+timeNote()};
   return {t:'bad', road:road, fee:fee,
     msg:'💰 实报实销：约 '+road.toFixed(1)+' 公里，客户需自付全额跑腿费约 '+fee.toFixed(0)+' 元（你 0 承担）；客户不愿出就不接'+timeNote()};
 }
@@ -317,17 +297,7 @@ new AMap.Circle({center:ORIGIN,radius:GREEN_KM*1000,strokeColor:'#27ae60',stroke
   fillColor:'#27ae60',fillOpacity:.08,map:map});
 new AMap.Circle({center:ORIGIN,radius:YELLOW_KM*1000,strokeColor:'#f39c12',strokeWeight:2,strokeStyle:'dashed',
   fillColor:'#f39c12',fillOpacity:.05,map:map});
-// 走廊线
-CORRIDORS.forEach(function(c){
-  var col = c.name.indexOf('南')>-1 ? '#d35400' : '#0e8c74';
-  new AMap.Polyline({path:c.path,strokeColor:'#ffffff',strokeWeight:11,strokeOpacity:.9,map:map});
-  new AMap.Polyline({path:c.path,strokeColor:col,strokeWeight:7,strokeOpacity:1,map:map,
-    showDir:true});
-});
-new AMap.Text({text:'🚌 南走廊',position:[104.0900,30.5315],anchor:'center',map:map,
-  style:{'font-size':'12px','color':'#fff','background':'#e67e22','border':'none','border-radius':'10px','padding':'2px 8px'}});
-new AMap.Text({text:'🚌 北走廊',position:[104.0660,30.5720],anchor:'center',map:map,
-  style:{'font-size':'12px','color':'#fff','background':'#16a085','border':'none','border-radius':'10px','padding':'2px 8px'}});
+
 // 出餐点
 new AMap.Marker({position:ORIGIN,map:map,content:'<div style="background:#c0392b;color:#fff;padding:3px 10px;border-radius:12px;font-size:12px;white-space:nowrap">🍳 出餐点</div>',anchor:'center',zIndex:200});
 // 老客户（可管理）

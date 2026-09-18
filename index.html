@@ -234,6 +234,7 @@ function showUpgradeBanner(){
   b2.style.cssText='flex-shrink:0;background:transparent;color:#fff;border:1px solid #fff;border-radius:6px;padding:4px 10px;cursor:pointer';
   b1.onclick=function(){ applyUpgrade(); bar.remove(); };
   b2.onclick=function(){ try{sessionStorage.setItem('verbar',String(CUST_VER));}catch(e){} bar.remove(); };
+  bar.appendChild(b1); bar.appendChild(b2);
   document.body.appendChild(bar);
 }
 function applyUpgrade(){

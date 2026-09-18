@@ -178,6 +178,9 @@ var DEFAULT_CUSTOMERS = [
   {name:'嘉年华青年城',addr:'锦韵路533号嘉年华青年城smart公寓',lng:104.081368,lat:30.535502,t:'b',meals:1,note:'试吃投放点'},
   {name:'新怡花园C区',addr:'观东一街555号新怡花园C区-6栋',lng:104.08661,lat:30.531884,t:'l',meals:2,note:'试吃投放点；9.13送2餐'}
 ];
+var CUST_VER = 2;   // 点位库版本：以后改了 DEFAULT_CUSTOMERS 就把这里 +1，老浏览器打开会弹同步提示
+function getVer(){ try{ var v=parseInt(localStorage.getItem('cust_ver'),10); return isNaN(v)?0:v; }catch(e){ return 0; } }
+function setVer(v){ try{ localStorage.setItem('cust_ver', String(v)); }catch(e){} }
 function loadCust(){
   try{
     var s=JSON.parse(localStorage.getItem('customers'));
@@ -192,6 +195,7 @@ function loadCust(){
       return s;
     }
   }catch(e){}
+  setVer(CUST_VER);   // 全新浏览器直接用最新默认值，无需弹同步条
   return DEFAULT_CUSTOMERS.slice();
 }
 function saveCust(){ try{ localStorage.setItem('customers', JSON.stringify(customers)); }catch(e){} }
@@ -216,6 +220,31 @@ GYM_SEEDS.forEach(function(g){
   if(!ex){ customers.push({name:g.name,addr:g.addr,lng:g.lng,lat:g.lat,t:'b',cx:'normal',note:'健身房固定点位',meals:g.meals}); }
 });
 saveCust();
+// ===== 点位库版本同步：本地存档版本落后于内置默认时，顶部弹同步条 =====
+if(localStorage.getItem('customers') && getVer()<CUST_VER && sessionStorage.getItem('verbar')!==String(CUST_VER)){
+  showUpgradeBanner();
+}
+function showUpgradeBanner(){
+  var bar=document.createElement('div');
+  bar.style.cssText='position:fixed;top:0;left:0;right:0;z-index:99999;background:#e67e22;color:#fff;padding:8px 12px;font-size:13px;display:flex;gap:8px;align-items:center;box-shadow:0 2px 6px rgba(0,0,0,.25)';
+  bar.innerHTML='<span style="flex:1">🔄 点位库已更新（v'+CUST_VER+'：26家点位·去掉南北走廊·地址完整显示），点「一键同步」换成最新列表（今日有单标记保留）</span>';
+  var b1=document.createElement('button'); b1.textContent='一键同步';
+  b1.style.cssText='flex-shrink:0;background:#fff;color:#e67e22;border:none;border-radius:6px;padding:4px 10px;font-weight:bold;cursor:pointer';
+  var b2=document.createElement('button'); b2.textContent='暂不';
+  b2.style.cssText='flex-shrink:0;background:transparent;color:#fff;border:1px solid #fff;border-radius:6px;padding:4px 10px;cursor:pointer';
+  b1.onclick=function(){ applyUpgrade(); bar.remove(); };
+  b2.onclick=function(){ try{sessionStorage.setItem('verbar',String(CUST_VER));}catch(e){} bar.remove(); };
+  document.body.appendChild(bar);
+}
+function applyUpgrade(){
+  var selNames=todaySel.map(function(i){ return customers[i]?customers[i].name:null; }).filter(Boolean);
+  customers=DEFAULT_CUSTOMERS.slice();
+  saveCust(); setVer(CUST_VER);
+  todaySel=[];
+  customers.forEach(function(k,i){ if(selNames.indexOf(k.name)>-1) todaySel.push(i); });
+  saveToday();
+  renderCustomers(); renderClist();
+}
 function renderCustomers(){
   custMarkers.forEach(function(m){ map.remove(m); }); custMarkers = [];
   customers.forEach(function(k){
@@ -650,7 +679,7 @@ map.on('click',function(e){
 });
 document.getElementById('creset').onclick=function(){
   if(!confirm('恢复为内置的默认客户列表？当前自定义列表会被覆盖。')) return;
-  customers=DEFAULT_CUSTOMERS.slice(); saveCust(); renderCustomers(); renderClist();
+  customers=DEFAULT_CUSTOMERS.slice(); saveCust(); setVer(CUST_VER); renderCustomers(); renderClist();
 };
 
 // ===== 今日排线（档案库点选 → 顺路排序 → 骑行/送达时长 → 闪送/货拉拉双参考价）=====

@@ -968,6 +968,22 @@ document.getElementById('prun').onclick=function(){
     });
     tr.latest=(slack===1e9||slack<0)?tr.dep:tr.dep+slack;
   });
+  // 8.5) 一趟可行性说明：若全部点串成一趟时限可行但超「单班上限」，或早出发即可赶上时限，给出明确提示
+  var oneTripHint='';
+  if(trips.length>1&&tour.length){
+    var infoAll=segInfo(tour,departMin);
+    var durAll=Math.round(infoAll.dur);
+    if(infoAll.ok){
+      if(durAll>maxTrip) oneTripHint='<br>💡 <b>已排线的点其实可 1 趟跑完</b>（全程约 '+durAll+' 分，各点时限都赶得上），只是超了「单班上限」'+maxTrip+' 分才拆线——把「单班上限」调到 ≥'+durAll+' 即可 1 趟';
+    }else{
+      var lateBy=0;
+      infoAll.arr.forEach(function(a,q){ lateBy=Math.max(lateBy,a-groups[tour[q]].dlm); });
+      if(lateBy>0){
+        var d0=Math.ceil(departMin-lateBy-1);
+        if(departMin-d0<=90) oneTripHint='<br>💡 <b>想 1 趟跑完？</b>全程约 '+durAll+' 分，最晚 <b>'+min2hm(d0)+'</b> 出发可全部赶上时限（现在 '+min2hm(departMin)+' 出发，来不及才拆线）';
+      }
+    }
+  }
   // 9) 调高德骑行API实测最终各趟分段（串行限速），失败段回退直线×1.35；排线中防重复点击
   if(window._planning){ pset('⏳ 正在排线中（调高德API测算距离），请稍等几秒…'); return; }
   window._planning=true;
@@ -1045,6 +1061,7 @@ document.getElementById('prun').onclick=function(){
         +'</div>');
     });
     var head='✅ <b>共 '+trips.length+' 趟</b>｜'+live.length+' 个有单点｜<b>'+totMeals+' 餐</b>｜全线 '+totKm.toFixed(1)+'km'
+      +(oneTripHint||'')
       +(forceSoloWarn?'<br><span class="mid">⚠️ 时间窗约束下无法完全满足单班上限，已按「时限优先」排出（超限趟已标注）</span>':'')
       +(planParams.round?'<br>🔁 顺序班模式：送完回店再出发下一趟（一人多趟）':'<br>🔀 并行班模式：各趟同时出发（多人各跑一条线）');
     pset(head

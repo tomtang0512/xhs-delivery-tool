@@ -5,10 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>小红书接单范围判断工具</title>
 <style>
-  html,body{margin:0;height:100%;font-family:"Microsoft YaHei",sans-serif}
+  html,body{margin:0;height:100%;overflow:hidden;font-family:"Microsoft YaHei",sans-serif}
   #map{width:100%;height:100%}
   .panel{position:absolute;top:12px;left:12px;z-index:999;background:#fff;border-radius:10px;
-    box-shadow:0 2px 12px rgba(0,0,0,.25);padding:14px 16px;width:330px;max-width:calc(100vw - 24px)}
+    box-shadow:0 2px 12px rgba(0,0,0,.25);padding:14px 16px;width:330px;max-width:calc(100vw - 24px);
+    max-height:calc(100vh - 24px);overflow-y:auto}
+  .panel::-webkit-scrollbar{width:6px}
+  .panel::-webkit-scrollbar-thumb{background:#ccc;border-radius:3px}
   .panel h3{margin:0 0 8px;font-size:15px;color:#c0392b}
   .row{display:flex;gap:8px}
   #addr{flex:1;border:1px solid #ccc;border-radius:6px;padding:7px 9px;font-size:14px}
@@ -45,6 +48,8 @@
   .ctag.cx.easy{background:#27ae60}
   .ctag.cx.normal{background:#95a5a6}
   .ctag.cx.hard{background:#c0392b}
+  .ctag.dl{background:#16a085}
+  .ctag.dl.sp{background:#8e44ad}
   #presult{margin-top:8px;font-size:13px;line-height:1.7;color:#333;max-height:260px;overflow:auto}
 </style>
 </head>
@@ -72,7 +77,7 @@
     <span class="lg" style="background:#c0392b"></span>12公里以上：客户自付全额跑腿费才接<br>
     <span class="lg" style="background:#2980b9"></span>现有客户参考点<br>
     ⏰ 时间窗：午 11:30~12:30 / 晚 17:30~18:30；两餐合送不加钱；窗外特殊时段加收10元<br>
-    🕐 一趟车的时间预算：车程分钟数≈公里数×2.2 + 停靠点×5；总用时超55分钟必须拆趟，一趟不能无限加长<br>
+    🕐 排线按每户「限XX:XX」时限＋电瓶车速＋上楼时间自动算；一趟超「单班上限」自动拆成多趟，多条线可派不同骑手同时跑<br>
     🏋️ 健身房4店（乐刻/青度/烁屿/荟创）已并入客户档案，与散单统一排线，可按同方向顺路并车
   </div>
   <details class="mgmt">
@@ -114,15 +119,27 @@
     </div>
   </details>
   <details class="mgmt">
-    <summary>🛵 今日排线（<span id="pnum">0</span> 个有单点）</summary>
-    <div style="font-size:12px;color:#888;margin:4px 0">先在上方「客户管理」里点亮地址旁的绿色「有单」标签＝今日有单（蓝色勾选框不算），再回来排线。</div>
+    <summary>🛵 今日排线（<span id="pnum">0</span> 个有单点 · 多趟拆线）</summary>
+    <div style="font-size:12px;color:#888;margin:4px 0">先点亮「有单」标签，再排线。每人时限用「限」标签设置（如 限11:40），没设的按窗口截止。一条线跑不完会自动拆成多趟，每趟给出逐点 ETA 和派骑手/自送建议。</div>
     <div class="addrow" style="flex-wrap:wrap;align-items:center">
+      <select id="psession" style="flex:none">
+        <option value="lunch">🥗 午餐窗</option>
+        <option value="dinner">🍗 晚餐窗</option>
+        <option value="all">🕐 全部时段</option>
+      </select>
       <span style="font-size:12px">速度</span><input id="pspeed" type="number" class="gnum" min="8" max="30" step="0.5">
-      <span style="font-size:12px">km/h；准备</span><input id="pprep" type="number" class="gnum" min="0" max="60">
-      <span style="font-size:12px">分；出发</span><input id="pdepart" type="time" class="gnum" style="width:96px">
+      <span style="font-size:12px">km/h</span>
+    </div>
+    <div class="addrow" style="flex-wrap:wrap;align-items:center">
+      <span style="font-size:12px">出发</span><input id="pdepart" type="time" class="gnum" style="width:86px">
+      <span style="font-size:12px">准备</span><input id="pprep" type="number" class="gnum" min="0" max="60">
+      <span style="font-size:12px">分</span>
+      <span style="font-size:12px">窗口截止</span><input id="pwinend" type="time" class="gnum" style="width:86px">
     </div>
     <div class="addrow" style="align-items:center">
-      <label style="font-size:12px"><input type="checkbox" id="pround"> 送完回到出餐点</label>
+      <span style="font-size:12px">单班上限</span><input id="pmaxtrip" type="number" class="gnum" min="15" max="180">
+      <span style="font-size:12px">分</span>
+      <label style="font-size:12px;margin-left:4px"><input type="checkbox" id="pround"> 送完回店（顺序班）</label>
       <button id="prun" style="margin-left:auto">🛵 开始排线</button>
     </div>
     <details style="margin-top:6px"><summary style="font-size:12px;color:#888;cursor:pointer">闪送计费参数（点对点参考价）</summary>
@@ -151,46 +168,45 @@ var SPECIAL_TIME_FEE = 10;  // 标准时间窗之外的特殊时段加收
 
 // ===== 老客户（可管理，保存在浏览器里）=====
 var DEFAULT_CUSTOMERS = [
-  {name:'政务服务中心',addr:'高新区政务服务中心（蕾蕾）',lng:104.057413,lat:30.552034,t:'l',meals:1,note:'蕾蕾 12:00前；荞麦面过凉水；1.9km'},
-  {name:'软件园D7',addr:'天府软件园D区D7座901',lng:104.074183,lat:30.541607,t:'l',meals:1,note:'张 11:40前；餐需加热'},
-  {name:'软件园D3',addr:'天府软件园D3栋马士基',lng:104.071199,lat:30.541204,t:'l',meals:2,note:'雷芸芸/Sheep 11:30 午2餐；偶尔晚18:30加餐；4.6km'},
-  {name:'晶科一号',addr:'武侯区天晖路360号晶科一号1511',lng:104.063597,lat:30.589506,t:'l',meals:1,note:'何软 11:40；5.5km'},
-  {name:'理想中心',addr:'武侯区天益街38号理想中心1栋610',lng:104.062733,lat:30.595063,t:'l',meals:1,note:'刘维一 11:30；5.9km'},
-  {name:'中德时代星辰',addr:'中德时代星辰E区3号楼1单元2214',lng:104.079876,lat:30.522632,t:'l',meals:2,cx:'hard',note:'小王 12:00前，常一次2餐；上楼；7.7km'},
-  {name:'五冶大厦',addr:'五冶大厦B区19楼',lng:104.084334,lat:30.589677,meals:1,cx:'hard',note:'赵 15:00特殊时段；出电梯打电话；7.2km'},
+  {name:'政务服务中心',addr:'高新区政务服务中心（蕾蕾）',lng:104.057413,lat:30.552034,t:'l',meals:1,dl:'12:00',note:'蕾蕾 12:00前；荞麦面过凉水；1.9km'},
+  {name:'软件园D7',addr:'天府软件园D区D7座901',lng:104.074183,lat:30.541607,t:'l',meals:1,dl:'11:40',note:'张 11:40前；餐需加热'},
+  {name:'软件园D3',addr:'天府软件园D3栋马士基',lng:104.071199,lat:30.541204,t:'l',meals:2,dl:'11:30',note:'雷芸芸/Sheep 11:30 午2餐；偶尔晚18:30加餐；4.6km'},
+  {name:'晶科一号',addr:'武侯区天晖路360号晶科一号1511',lng:104.063597,lat:30.589506,t:'l',meals:1,dl:'11:40',note:'何软 11:40；5.5km'},
+  {name:'理想中心',addr:'武侯区天益街38号理想中心1栋610',lng:104.062733,lat:30.595063,t:'l',meals:1,dl:'11:30',note:'刘维一 11:30；5.9km'},
+  {name:'中德时代星辰',addr:'中德时代星辰E区3号楼1单元2214',lng:104.079876,lat:30.522632,t:'l',meals:2,cx:'hard',dl:'12:00',note:'小王 12:00前，常一次2餐；上楼；7.7km'},
+  {name:'五冶大厦',addr:'五冶大厦B区19楼',lng:104.084334,lat:30.589677,meals:1,cx:'hard',dl:'15:00',note:'赵 15:00特殊时段；出电梯打电话；7.2km'},
   {name:'桐梓林中华园',addr:'桐梓林北路6号中华园锦园9-3-A座',lng:104.06354,lat:30.617221,t:'d',meals:1,note:'袁先生 晚17:30标准窗；8.6km'},
-  {name:'卓锦荟',addr:'和祥二街卓锦荟专家公寓前台',lng:104.108061,lat:30.522502,t:'l',meals:1,cx:'easy',note:'李先生 11:30；放前台；9.1km'},
-  {name:'创新中心E栋',addr:'和祥二街505号新加坡创新中心E栋7楼',lng:104.109836,lat:30.519588,t:'l',meals:1,note:'彭家俊 11:30；上楼；9.5km'},
-  {name:'东方希望大厦',addr:'高朋大道3号东方希望大厦B座3楼305',lng:104.041722,lat:30.625895,t:'l',meals:1,note:'小奶油 11:40；10.4km → 每单+8元'},
-  {name:'交通管理学校',addr:'红牌楼佳灵路22号四川省交通管理学校外卖柜',lng:104.022847,lat:30.628773,t:'l',meals:1,cx:'easy',note:'吴 12:00前；红牌楼10.3km → 每单+8元；放外卖柜'},
-  {name:'观城9栋',addr:'观城9栋1单元504',lng:104.121447,lat:30.647202,t:'l',meals:1,cx:'hard',note:'汤女士 11:15；16km ⛔不接（周复购，可集中日/自提）'},
-  {name:'滨江天际',addr:'锦江区狮子山街道滨江天际6栋606',lng:104.126774,lat:30.614009,t:'l',meals:1,cx:'hard',note:'zzzzl 11:50；13.5km ⛔不接（周复购）'},
-  {name:'锦江樱花街',addr:'锦江区樱花街383号2-1-1702',lng:104.150956,lat:30.604647,t:'l',meals:1,cx:'hard',note:'百合 12:00；14.4km ⛔不接'},
-  {name:'国机西南大厦',addr:'成华区航天路50号国机西南大厦B座10楼',lng:104.174825,lat:30.688108,t:'l',meals:1,cx:'hard',note:'范女士 11:40；23.9km ⛔不接'},
-  {name:'乐刻私教馆',addr:'天府二街999号世豪广场3层（高新伊藤店）',lng:104.044099,lat:30.550429,t:'d',meals:2,note:'健身房固定点位；许先生/杨方云 晚19:00送（晚窗外）'},
-  {name:'青度健身（香月湖）',addr:'吉庆一路香月湖6栋负1楼',lng:104.058985,lat:30.555518,t:'l',meals:2,note:'健身房固定点位；韩先生 午12:00前 2餐'},
-  {name:'熠健身（汇锦城店）',addr:'盛邦街100号汇锦城8栋C座',lng:104.054242,lat:30.556066,meals:3,note:'自配送 14:00 ×3餐；不进排线'},
-  {name:'朗诗熙华府',addr:'盛治街777号朗诗熙华府12栋2302',lng:104.042105,lat:30.552414,t:'l',meals:1,cx:'hard',note:'李冠霖 12:31~13:00特殊窗；上楼2302；近店'},
-  {name:'烁屿健身（中和）',addr:'吉龙二街246号',lng:104.089438,lat:30.535391,t:'b',meals:2,note:'健身房固定点位（超级店）；邱静婷 12:00，无电话送前台+拍照'},
-  {name:'烁屿健身（中和精品店）',addr:'梓州大道辅路与应龙路口（精品店）',lng:104.082473,lat:30.532688,t:'b',meals:1,note:'试吃投放点；9.13试吃8餐'},
-  {name:'荟创空间233',addr:'吉龙二街430号（陆肖地铁站A口）',lng:104.095814,lat:30.535185,t:'b',meals:1,cx:'easy',note:'健身房固定点位，与乡村兔同楼'},
-  {name:'乡村兔（中和店）',addr:'吉龙二街430号乡村兔鲜兔火锅',lng:104.096008,lat:30.535474,t:'b',meals:1,note:'马伯伦 12:00；到店打电话；试吃/新客投放点'},
-  {name:'嘉年华青年城',addr:'锦韵路533号嘉年华青年城smart公寓',lng:104.081368,lat:30.535502,t:'b',meals:1,note:'试吃投放点'},
-  {name:'新怡花园C区',addr:'观东一街555号新怡花园C区-6栋',lng:104.08661,lat:30.531884,t:'l',meals:2,note:'试吃投放点；9.13送2餐'}
+  {name:'卓锦荟',addr:'和祥二街卓锦荟专家公寓前台',lng:104.108061,lat:30.522502,t:'l',meals:1,cx:'easy',dl:'11:30',note:'李先生 11:30；放前台；9.1km'},
+  {name:'创新中心E栋',addr:'和祥二街505号新加坡创新中心E栋7楼',lng:104.109836,lat:30.519588,t:'l',meals:1,dl:'11:30',note:'彭家俊 11:30；上楼；9.5km'},
+  {name:'东方希望大厦',addr:'高朋大道3号东方希望大厦B座3楼305',lng:104.041722,lat:30.625895,t:'l',meals:1,dl:'11:40',note:'小奶油 11:40；10.4km → 每单+8元'},
+  {name:'交通管理学校',addr:'红牌楼佳灵路22号四川省交通管理学校外卖柜',lng:104.022847,lat:30.628773,t:'l',meals:1,cx:'easy',dl:'12:00',note:'吴 12:00前；红牌楼10.3km → 每单+8元；放外卖柜'},
+  {name:'观城9栋',addr:'观城9栋1单元504',lng:104.121447,lat:30.647202,t:'l',meals:1,cx:'hard',dl:'11:15',note:'汤女士 11:15；16km ⛔不接（周复购，可集中日/自提）'},
+  {name:'滨江天际',addr:'锦江区狮子山街道滨江天际6栋606',lng:104.126774,lat:30.614009,t:'l',meals:1,cx:'hard',dl:'11:50',note:'zzzzl 11:50；13.5km ⛔不接（周复购）'},
+  {name:'锦江樱花街',addr:'锦江区樱花街383号2-1-1702',lng:104.150956,lat:30.604647,t:'l',meals:1,cx:'hard',dl:'12:00',note:'百合 12:00；14.4km ⛔不接'},
+  {name:'国机西南大厦',addr:'成华区航天路50号国机西南大厦B座10楼',lng:104.174825,lat:30.688108,t:'l',meals:1,cx:'hard',dl:'11:40',note:'范女士 11:40；23.9km ⛔不接'},
+  {name:'乐刻私教馆',addr:'天府二街999号世豪广场3层（高新伊藤店）',lng:104.044099,lat:30.550429,t:'d',meals:2,dl:'19:00',note:'健身房固定点位；许先生/杨方云 晚19:00送（晚窗外）'},
+  {name:'青度健身（香月湖）',addr:'吉庆一路香月湖6栋负1楼',lng:104.058985,lat:30.555518,t:'l',meals:2,dl:'12:00',note:'健身房固定点位；韩先生 午12:00前 2餐'},
+  {name:'熠健身（汇锦城店）',addr:'盛邦街100号汇锦城8栋C座',lng:104.054242,lat:30.556066,meals:3,dl:'14:00',note:'自配送 14:00 ×3餐；不进排线'},
+  {name:'朗诗熙华府',addr:'盛治街777号朗诗熙华府12栋2302',lng:104.042105,lat:30.552414,t:'l',meals:1,cx:'hard',dl:'13:00',note:'李冠霖 12:31~13:00特殊窗；上楼2302；近店'},
+  {name:'烁屿健身（中和）',addr:'吉龙二街246号',lng:104.089438,lat:30.535391,t:'b',meals:2,dl:'12:00',note:'健身房固定点位（超级店）；邱静婷 12:00，无电话送前台+拍照'},
+  {name:'烁屿健身（中和精品店）',addr:'梓州大道辅路与应龙路口（精品店）',lng:104.082473,lat:30.532688,t:'b',meals:1,dl:'12:00',note:'试吃投放点；9.13试吃8餐'},
+  {name:'荟创空间233',addr:'吉龙二街430号（陆肖地铁站A口）',lng:104.095814,lat:30.535185,t:'b',meals:1,cx:'easy',dl:'12:00',note:'健身房固定点位，与乡村兔同楼'},
+  {name:'乡村兔（中和店）',addr:'吉龙二街430号乡村兔鲜兔火锅',lng:104.096008,lat:30.535474,t:'b',meals:1,dl:'12:00',note:'马伯伦 12:00；到店打电话；试吃/新客投放点'},
+  {name:'嘉年华青年城',addr:'锦韵路533号嘉年华青年城smart公寓',lng:104.081368,lat:30.535502,t:'b',meals:1,dl:'12:00',note:'试吃投放点'},
+  {name:'新怡花园C区',addr:'观东一街555号新怡花园C区-6栋',lng:104.08661,lat:30.531884,t:'l',meals:2,dl:'12:00',note:'试吃投放点；9.13送2餐'}
 ];
-var CUST_VER = 2;   // 点位库版本：以后改了 DEFAULT_CUSTOMERS 就把这里 +1，老浏览器打开会弹同步提示
+var CUST_VER = 3;   // 点位库版本：以后改了 DEFAULT_CUSTOMERS 就把这里 +1，老浏览器打开会弹同步提示
 function getVer(){ try{ var v=parseInt(localStorage.getItem('cust_ver'),10); return isNaN(v)?0:v; }catch(e){ return 0; } }
 function setVer(v){ try{ localStorage.setItem('cust_ver', String(v)); }catch(e){} }
 function loadCust(){
   try{
     var s=JSON.parse(localStorage.getItem('customers'));
     if(Array.isArray(s)&&s.length){
-      // 老数据补地址：同名默认客户自动补上地址信息
+      // 老数据补地址/送达时限：同名默认客户自动补上
       s.forEach(function(e){
-        if(!e.addr){
-          var d=DEFAULT_CUSTOMERS.filter(function(x){return x.name===e.name;})[0];
-          if(d) e.addr=d.addr;
-        }
+        var d=DEFAULT_CUSTOMERS.filter(function(x){return x.name===e.name;})[0];
+        if(!e.addr && d) e.addr=d.addr;
+        if(e.dl===undefined && d && d.dl) e.dl=d.dl;
       });
       return s;
     }
@@ -227,7 +243,7 @@ if(localStorage.getItem('customers') && getVer()<CUST_VER && sessionStorage.getI
 function showUpgradeBanner(){
   var bar=document.createElement('div');
   bar.style.cssText='position:fixed;top:0;left:0;right:0;z-index:99999;background:#e67e22;color:#fff;padding:8px 12px;font-size:13px;display:flex;gap:8px;align-items:center;box-shadow:0 2px 6px rgba(0,0,0,.25)';
-  bar.innerHTML='<span style="flex:1">🔄 点位库已更新（v'+CUST_VER+'：26家点位·去掉南北走廊·地址完整显示），点「一键同步」换成最新列表（今日有单标记保留）</span>';
+  bar.innerHTML='<span style="flex:1">🔄 点位库已更新（v'+CUST_VER+'：每户新增「送达时限」＋排线升级为多骑手多趟自动拆线），点「一键同步」换成最新列表（今日有单标记保留）</span>';
   var b1=document.createElement('button'); b1.textContent='一键同步';
   b1.style.cssText='flex-shrink:0;background:#fff;color:#e67e22;border:none;border-radius:6px;padding:4px 10px;font-weight:bold;cursor:pointer';
   var b2=document.createElement('button'); b2.textContent='暂不';
@@ -267,7 +283,10 @@ function renderClist(){
     var dtag='<span class="ctag cd'+(todaySel.indexOf(i)>-1?' on':'')+'" title="今日有单：点击切换（变绿=参与今天排线；蓝色勾选框不算）" data-s="'+i+'">有单</span>';
     var mtag='<span class="ctag cm" title="餐数：点击+1（到6归1），排线时统计总餐数" data-m="'+i+'">餐×'+(k.meals||1)+'</span>';
     var cxtag='<span class="ctag cx '+(k.cx||'normal')+'" title="送达复杂度：点击切换（简3分/普5分/难8分）" data-x="'+i+'">'+(CX_TXT[k.cx||'normal'])+'</span>';
-    d.innerHTML='<input type="checkbox" class="cbx" data-c="'+i+'">'+dtag+'<span title="'+(k.addr||k.name)+'" style="flex:1;min-width:0;white-space:normal;word-break:break-all;line-height:1.5;padding:2px 0">'+show+'</span><span>'+mtag+cxtag+tag+'<span class="ce" title="编辑名字/地址/备注" data-e="'+i+'">✏️</span><span class="cb" title="删除" data-i="'+i+'">✖</span></span>';
+    var dlm=k.dl?hm2min(k.dl):null;
+    var dlsp=dlm!==null&&!((dlm>=690&&dlm<=750)||(dlm>=1050&&dlm<=1110));
+    var dltag='<span class="ctag dl'+(dlsp?' sp':'')+'" title="送达截止：点击修改（如 11:40；留空＝按窗口截止 12:30/18:30）" data-d="'+i+'">'+(k.dl?('限'+k.dl):'窗内')+'</span>';
+    d.innerHTML='<input type="checkbox" class="cbx" data-c="'+i+'">'+dtag+'<span title="'+(k.addr||k.name)+'" style="flex:1;min-width:0;white-space:normal;word-break:break-all;line-height:1.5;padding:2px 0">'+show+'</span><span>'+mtag+cxtag+dltag+tag+'<span class="ce" title="编辑名字/地址/备注" data-e="'+i+'">✏️</span><span class="cb" title="删除" data-i="'+i+'">✖</span></span>';
     el.appendChild(d);
   });
   document.getElementById('cnum').textContent = customers.length;
@@ -484,6 +503,19 @@ document.getElementById('clist').addEventListener('click',function(e){
     saveCust(); renderClist();
     return;
   }
+  if(t.classList.contains('dl')){
+    var i6=+t.getAttribute('data-d');
+    var v6=prompt('送达截止时间（24小时制 HH:MM，如 11:40）：\n留空＝按窗口截止（午12:30/晚18:30）', customers[i6].dl||'');
+    if(v6===null) return;
+    v6=v6.trim();
+    if(v6){
+      var m6=v6.match(/^(\d{1,2}):(\d{2})$/);
+      if(!m6||+m6[1]>23||+m6[2]>59){ alert('格式不对，请输入如 11:40'); return; }
+      customers[i6].dl=v6;
+    } else { delete customers[i6].dl; }
+    saveCust(); renderClist();
+    return;
+  }
   if(t.classList.contains('ctime')){
     var i=+t.getAttribute('data-t');
     var seq=['','l','d','b'];
@@ -683,29 +715,40 @@ document.getElementById('creset').onclick=function(){
   customers=DEFAULT_CUSTOMERS.slice(); saveCust(); setVer(CUST_VER); renderCustomers(); renderClist();
 };
 
-// ===== 今日排线（档案库点选 → 顺路排序 → 骑行/送达时长 → 闪送/货拉拉双参考价）=====
+// ===== 今日排线 v2（多骑手多趟：时间窗 + 单班上限 + 大巡游最优切割 Route-First/Cluster-Second）=====
 var MERGE_KM=0.1;   // 直线多少公里内视为同一目的地（送达时间只算一次）
-var planParams={speed:16,prep:0,depart:'',round:false,fstart:13,fkm:3,fper:2};
+var planParams={session:'lunch',speed:20,prep:0,depart:'11:00',round:false,maxTrip:55,winEnd:'12:30',fstart:13,fkm:3,fper:2};
 try{var pp=JSON.parse(localStorage.getItem('planParams'));if(pp)planParams=Object.assign(planParams,pp);}catch(e){}
 var planLines=[];
+var TRIP_COLORS=['#e91e63','#2980b9','#27ae60','#e67e22','#8e44ad','#00838f','#c0392b','#16a085'];
 function loadP2El(){
+  document.getElementById('psession').value=planParams.session||'lunch';
   document.getElementById('pspeed').value=planParams.speed;
   document.getElementById('pprep').value=planParams.prep;
   document.getElementById('pdepart').value=planParams.depart||'';
+  document.getElementById('pmaxtrip').value=planParams.maxTrip||55;
+  document.getElementById('pwinend').value=planParams.winEnd||'12:30';
   document.getElementById('pround').checked=!!planParams.round;
   document.getElementById('fstart').value=planParams.fstart;
   document.getElementById('fkm').value=planParams.fkm;
   document.getElementById('fper').value=planParams.fper;
 }
 loadP2El();
+document.getElementById('psession').addEventListener('change',function(){
+  document.getElementById('pwinend').value = this.value==='dinner' ? '18:30' : '12:30';
+});
 function savePlanParams(){
-  planParams={speed:+document.getElementById('pspeed').value||16,prep:+document.getElementById('pprep').value||0,
+  planParams={session:document.getElementById('psession').value,
+    speed:+document.getElementById('pspeed').value||20,prep:+document.getElementById('pprep').value||0,
     depart:document.getElementById('pdepart').value||'',round:document.getElementById('pround').checked,
+    maxTrip:+document.getElementById('pmaxtrip').value||55,winEnd:document.getElementById('pwinend').value||'12:30',
     fstart:+document.getElementById('fstart').value||13,fkm:+document.getElementById('fkm').value||3,fper:+document.getElementById('fper').value||2};
   try{localStorage.setItem('planParams',JSON.stringify(planParams));}catch(e){}
 }
 function pset(html){document.getElementById('presult').innerHTML=html;}
 function updatePnum(){document.getElementById('pnum').textContent=todaySel.filter(function(i){return customers[i];}).length;}
+function hm2min(s){var p=String(s||'').split(':');return (+p[0]||0)*60+(+p[1]||0);}
+function min2hm(m){m=Math.round(m);var h=Math.floor(m/60),mm=m-h*60;if(mm<0){mm+=60;h--;}return ('0'+h).slice(-2)+':'+('0'+mm).slice(-2);}
 function legPoly(path){
   var pts=[];
   (path.steps||[]).forEach(function(s){(s.polyline||'').split(';').forEach(function(q){var xy=q.split(',');if(xy.length===2)pts.push([+xy[0],+xy[1]]);});});
@@ -728,117 +771,280 @@ function ridingLeg(a,b){
   });
 }
 function eachPerm(a,cb){(function rec(k){if(k<=1){cb(a.slice());return;}for(var i=0;i<k;i++){rec(k-1);var j=(k%2===0)?i:0;var t=a[j];a[j]=a[k-1];a[k-1]=t;}})(a.length);}
+function seqAll(ts){   // 串行+间隔，避开高德个人Key的QPS限制
+  var out=[],p=Promise.resolve();
+  ts.forEach(function(t){
+    p=p.then(function(){return t().then(function(r){out.push(r);}).catch(function(){out.push(null);});});
+    p=p.then(function(){return new Promise(function(res){setTimeout(res,130);});});
+  });
+  return p.then(function(){return out;});
+}
 document.getElementById('prun').onclick=function(){
+  savePlanParams();
   var live=todaySel.filter(function(i){return customers[i];});
   if(!live.length){ pset('<span class="mid">今天还没有有单地址。注意：左侧蓝色勾选框是批量操作用的，不算有单——要点地址旁的「有单」标签变绿才算。</span>'); return; }
-  savePlanParams();
-  // 1) 合并同一目的地：直线≤100米算同一栋楼，送达时间只算一次、取最高复杂度
-  var groups=[];
+  var sess=planParams.session||'lunch';
+  var departMin = planParams.depart ? hm2min(planParams.depart) : (sess==='dinner'?hm2min('17:30'):hm2min('11:00'));
+  var winEndMin = planParams.winEnd ? hm2min(planParams.winEnd) : (sess==='dinner'?hm2min('18:30'):hm2min('12:30'));
+  var prep=+planParams.prep||0, speed=+planParams.speed||20, maxTrip=+planParams.maxTrip||55;
+  var ride=function(a,b){return km(a,b)*ROAD_K/speed*60;};
+
+  // 1) 分桶：习惯时段匹配 + 每户「限XX:XX」时限；窗口外的特殊时段单单独列出
+  var sessOK=function(k){var t=k.t||'';return sess==='all'||t===''||t==='b'||t===(sess==='lunch'?'l':'d');};
+  var mainPts=[],excluded=[],specials=[];
   live.forEach(function(i){
-    var k=customers[i],p=[k.lng,k.lat];
+    var k=customers[i];
+    if(!sessOK(k)){excluded.push(k);return;}
+    var dlm=k.dl?hm2min(k.dl):winEndMin;
+    if(dlm>winEndMin+1){specials.push({k:k,dlm:dlm});return;}
+    mainPts.push({k:k,dlm:dlm});
+  });
+  if(!mainPts.length){
+    var m0='本时段没有可排线的点。';
+    if(excluded.length) m0+='<br>· 时段不符（习惯时段）：'+excluded.map(function(k){return k.name+'（'+(TIME_MAP[k.t||'']||'不固定')+'）';}).join('、');
+    if(specials.length) m0+='<br>· 特殊时段（窗口外）：'+specials.map(function(sp){return sp.k.name+' '+min2hm(sp.dlm);}).join('、')+'——单独安排';
+    pset(m0); return;
+  }
+  // 2) 合并同一目的地：直线≤100m 同楼；送达按最高复杂度算一次、时限取最早
+  var groups=[];
+  mainPts.forEach(function(mp){
+    var p=[mp.k.lng,mp.k.lat];
     var g=null;
     for(var gi=0;gi<groups.length;gi++){if(km(p,groups[gi].pos)<=MERGE_KM){g=groups[gi];break;}}
-    if(g){g.members.push(k);g.min=Math.max(g.min,CX_MIN[k.cx||'normal']);g.meals+=(k.meals||1);}
-    else groups.push({pos:p,members:[k],min:CX_MIN[k.cx||'normal'],meals:(k.meals||1)});
+    if(g){g.members.push(mp.k);g.min=Math.max(g.min,CX_MIN[mp.k.cx||'normal']);g.dlm=Math.min(g.dlm,mp.dlm);g.meals+=(mp.k.meals||1);}
+    else groups.push({pos:p,members:[mp.k],min:CX_MIN[mp.k.cx||'normal'],dlm:mp.dlm,meals:(mp.k.meals||1)});
   });
-  // 2) 排顺序：≤8点穷举精确解；>8点最近邻贪心+2-opt优化（目标：总距离最短）
+  var glabel=function(g){return g.members.map(function(m){return m.name;}).join('+');};
+  // 3) 时限过紧的点（出发+准备+直线骑行已超时限）剔除，单独提示最晚出发时间
+  var tight=[];
+  for(var r1=groups.length-1;r1>=0;r1--){
+    var g1=groups[r1], need=prep+ride(ORIGIN,g1.pos);
+    if(departMin+need>g1.dlm){tight.push({g:g1,latest:g1.dlm-need});groups.splice(r1,1);}
+  }
   var n=groups.length;
-  function total(ord){var s=0,cur=ORIGIN;ord.forEach(function(oi){s+=km(cur,groups[oi].pos);cur=groups[oi].pos;});if(planParams.round)s+=km(cur,ORIGIN);return s;}
-  var best=[],bd=1e18;
+  var warn='';
+  tight.forEach(function(w){warn+='<br>⚠️ <b>'+glabel(w.g)+'</b> 时限 '+min2hm(w.g.dlm)+' 来不及：需最晚 '+min2hm(w.latest)+' 出发——建议单独提前送/自送/与客户改约';});
+  specials.forEach(function(sp){warn+='<br>⏰ <b>'+sp.k.name+'</b> 特殊时段 '+min2hm(sp.dlm)+'：不进本窗口排线，单独安排';});
+  excluded.forEach(function(k){warn+='<br>· '+k.name+'：习惯时段为「'+(TIME_MAP[k.t||'']||'不固定')+'」，未纳入本次排线';});
+  if(!n){
+    pset('❌ 可排线的点为 0（时限都太紧）。建议：把「出发」时间提前，或放宽「窗口截止」。<br>'+warn);
+    return;
+  }  // 4) 大巡游：先把所有点串成一条时间最优的大线（时限违约重罚），N 条线＝对大线做最优切割
   var idxs=groups.map(function(_,i){return i;});
-  if(n<=8){ eachPerm(idxs,function(pm){var d=total(pm);if(d<bd){bd=d;best=pm;}}); }
-  else{
-    var left=idxs.slice(),cur=ORIGIN;
-    while(left.length){
-      left.sort(function(a,b){return km(cur,groups[a].pos)-km(cur,groups[b].pos);});
-      var nx=left.shift(); best.push(nx); cur=groups[nx].pos;
+  function tourCost(ord){
+    var t=0,cur=ORIGIN,clock=departMin+prep,viol=0;
+    for(var q=0;q<ord.length;q++){
+      var g=groups[ord[q]],tt=ride(cur,g.pos);
+      t+=tt;clock+=tt;
+      var late=clock-g.dlm;if(late>0)viol+=late;
+      clock+=g.min;cur=g.pos;
     }
-    bd=total(best);
-    var improved=true;
-    while(improved){
-      improved=false;
+    return t+10000*viol;
+  }
+  var tour=[];
+  if(n<=8){
+    var bc=1e18;
+    eachPerm(idxs.slice(),function(pm){var c=tourCost(pm);if(c<bc){bc=c;tour=pm.slice();}});
+  }else{
+    var left=idxs.slice(),cur2=ORIGIN;
+    while(left.length){
+      left.sort(function(a,b){return ride(cur2,groups[a].pos)-ride(cur2,groups[b].pos);});
+      var nx=left.shift();tour.push(nx);cur2=groups[nx].pos;
+    }
+    var bc2=tourCost(tour),improved2=true;
+    while(improved2){
+      improved2=false;
       for(var i2=0;i2<n-1;i2++)for(var j2=i2+1;j2<n;j2++){
-        var cand=best.slice();var seg=cand.splice(i2,j2-i2+1);seg.reverse();cand.splice.apply(cand,[i2,0].concat(seg));
-        var d2=total(cand);
-        if(d2<bd-1e-9){best=cand;bd=d2;improved=true;}
+        var cand=tour.slice();var seg=cand.splice(i2,j2-i2+1);seg.reverse();cand.splice.apply(cand,[i2,0].concat(seg));
+        var c2=tourCost(cand);
+        if(c2<bc2-1e-9){tour=cand;bc2=c2;improved2=true;}
       }
     }
   }
-  var glabel=function(oi){return groups[oi].members.map(function(m){return m.name;}).join('+');};
-  var stops=[{name:'出餐点'}].concat(best.map(function(oi){return {name:glabel(oi)};}));
-  if(planParams.round) stops.push({name:'出餐点'});
-  var seq=[ORIGIN].concat(best.map(function(oi){return groups[oi].pos;}));
-  var legs=[];
-  for(var i3=0;i3<seq.length-1;i3++) legs.push([seq[i3],seq[i3+1]]);
-  if(planParams.round && seq.length>1) legs.push([seq[seq.length-1],ORIGIN]);   // 回程腿
-  pset('排线中…正在调高德骑行API测真实距离');
-  var flashList=[];   // {name, dk} 点对点距离
-  groups.forEach(function(g){g.members.forEach(function(m){flashList.push({name:m.name,pos:[m.lng,m.lat]});});});
-  function seqAll(ts){   // 串行+间隔，避开高德个人Key的QPS限制
-    var out=[],p=Promise.resolve();
-    ts.forEach(function(t){
-      p=p.then(function(){return t().then(function(r){out.push(r);}).catch(function(){out.push(null);});});
-      p=p.then(function(){return new Promise(function(res){setTimeout(res,130);});});
-    });
-    return p.then(function(){return out;});
+  // 5) 趟内时间模拟：按序累计到达时刻，校验时限；「送完回店」勾选时含回程并支持顺序班（一人多趟）
+  function segInfo(ord,dep){
+    dep=(dep===undefined)?departMin:dep;
+    var clock=dep+prep,cur=ORIGIN,dur=prep,kmAcc=0,ok=true,arr=[];
+    for(var q=0;q<ord.length;q++){
+      var g=groups[ord[q]],tt=ride(cur,g.pos);
+      dur+=tt;kmAcc+=tt*speed/60;clock+=tt;cur=g.pos;
+      arr.push(clock);
+      if(clock>g.dlm+1e-9)ok=false;
+      dur+=g.min;clock+=g.min;
+    }
+    var finish=clock;
+    if(planParams.round&&ord.length){var tr=ride(cur,ORIGIN);dur+=tr;kmAcc+=tr*speed/60;finish+=tr;}
+    return {ok:ok,dur:dur,km:kmAcc,arr:arr,finish:finish};
   }
-  seqAll(legs.map(function(l){return function(){return ridingLeg(l[0],l[1]);};}))
-  .then(function(legRes){
-    return seqAll(flashList.map(function(f){return function(){return ridingLeg(ORIGIN,f.pos);};})).then(function(flashRes){
-      return [legRes,flashRes];
+  // 6) 最优切割 DP：f[i]＝前 i 点最少几趟（趟数相同时取总时长最短）；并行班每趟同刻出发，顺序班接力出发
+  function cutDP(forceSolo){
+    var INF=1e9;
+    var f=[{t:0,end:departMin,d:0}],cut=[-1];
+    for(var i=1;i<=n;i++){
+      f[i]={t:INF,end:INF,d:INF};
+      for(var j=0;j<i;j++){
+        if(f[j].t>=INF)continue;
+        var dep=planParams.round?f[j].end:departMin;
+        var seg=tour.slice(j,i);
+        var info=segInfo(seg,dep);
+        var okk=info.ok&&(info.dur<=maxTrip||forceSolo);   // 兜底：时限可行的趟即使超单班上限也放行
+        if(!okk)continue;
+        var cand={t:f[j].t+1,end:info.finish,d:f[j].d+info.dur};
+        if(cand.t<f[i].t||(cand.t===f[i].t&&(planParams.round?cand.end<f[i].end:cand.d<f[i].d))){f[i]=cand;cut[i]=j;}
+      }
+    }
+    return f[n].t>=INF?null:{f:f,cut:cut};
+  }
+  var dp=cutDP(false),forceSolo=false;
+  if(!dp){dp=cutDP(true);forceSolo=true;}
+  if(!dp){pset('❌ 约束太紧拆不出线：请放宽「单班上限」、把「出发」提前或放宽「窗口截止」。<br>'+warn);return;}
+  var forceSoloWarn=forceSolo;
+  var trips=[],i3=n;
+  while(i3>0){var j3=dp.cut[i3];trips.push({seg:tour.slice(j3,i3)});i3=j3;}
+  trips.reverse();
+  // 7) 精修：趟内 2-opt + 跨趟挪点（只接受整体不变差的改动）
+  function chainEval(){
+    var t=departMin,allok=true,tot=0;
+    trips.forEach(function(tr){
+      var info=segInfo(tr.seg,planParams.round?t:departMin);
+      tr.info=info;tr.dep=planParams.round?t:departMin;
+      tot+=info.dur;
+      if(!info.ok||(info.dur>maxTrip&&tr.seg.length>1))allok=false;
+      t=info.finish;
     });
+    return {allok:allok,end:t,tot:tot};
+  }
+  var chain=chainEval();
+  trips.forEach(function(tr){
+    var improved=true,guard=0;
+    while(improved&&guard<6){
+      improved=false;guard++;
+      for(var a=0;a<tr.seg.length-1;a++)for(var b=a+1;b<tr.seg.length;b++){
+        var cand=tr.seg.slice();var s2=cand.splice(a,b-a+1);s2.reverse();cand.splice.apply(cand,[a,0].concat(s2));
+        var c2=segInfo(cand,tr.dep);
+        if(c2.ok&&(c2.dur<=maxTrip||cand.length===1)&&c2.dur<tr.info.dur-1e-9){tr.seg=cand;tr.info=c2;improved=true;}
+      }
+    }
+  });
+  chain=chainEval();
+  var guard2=0,imp=true;
+  while(imp&&guard2<4){
+    imp=false;guard2++;
+    for(var tI=0;tI<trips.length-1;tI++){
+      var pairs=[[tI,tI+1,true],[tI+1,tI,false]];
+      for(var pi=0;pi<pairs.length;pi++){
+        var fromI=pairs[pi][0],toI=pairs[pi][1],fromEnd=pairs[pi][2];
+        var A=trips[fromI],B=trips[toI];
+        if(!A.seg.length||!B.seg.length)continue;
+        var na=A.seg.slice(),nb=B.seg.slice();
+        if(fromEnd){nb.unshift(na.pop());}else{nb.push(na.shift());}
+        if(!na.length)continue;
+        var keepA=A.seg,keepB=B.seg;
+        A.seg=na;B.seg=nb;
+        var ch=chainEval();
+        if(ch.allok&&(ch.end<chain.end-0.05||(Math.abs(ch.end-chain.end)<=0.05&&ch.tot<chain.tot-0.05))){chain=ch;imp=true;}
+        else{A.seg=keepA;B.seg=keepB;chainEval();}
+      }
+    }
+  }
+  // 8) 每趟「最晚出发」＝不迟到前提下还能拖多久
+  trips.forEach(function(tr){
+    var slack=1e9,clock=tr.dep+prep,cur=ORIGIN;
+    tr.seg.forEach(function(gi){
+      clock+=ride(cur,groups[gi].pos);
+      slack=Math.min(slack,groups[gi].dlm-clock);
+      clock+=groups[gi].min;cur=groups[gi].pos;
+    });
+    tr.latest=(slack===1e9||slack<0)?tr.dep:tr.dep+slack;
+  });
+  // 9) 调高德骑行API实测最终各趟分段（串行限速），失败段回退直线×1.35；排线中防重复点击
+  if(window._planning){ pset('⏳ 正在排线中（调高德API测算距离），请稍等几秒…'); return; }
+  window._planning=true;
+  pset('排线中…正在调高德骑行API测真实距离（点越多越慢，约几秒到十几秒）');
+  var apiLegs=[];
+  trips.forEach(function(tr){
+    var seq=[ORIGIN].concat(tr.seg.map(function(gi){return groups[gi].pos;}));
+    if(planParams.round&&tr.seg.length)seq.push(ORIGIN);
+    for(var q=0;q<seq.length-1;q++)apiLegs.push([seq[q],seq[q+1]]);
+  });
+  var flashList=[];
+  trips.forEach(function(tr,ti){tr.seg.forEach(function(gi){groups[gi].members.forEach(function(m){flashList.push({name:m.name,pos:[m.lng,m.lat],ti:ti});});});});
+  specials.forEach(function(sp){flashList.push({name:sp.k.name,pos:[sp.k.lng,sp.k.lat],ti:-1});});
+  seqAll(apiLegs.map(function(l){return function(){return ridingLeg(l[0],l[1]);};}))
+  .then(function(legRes){
+    return seqAll(flashList.map(function(f){return function(){return ridingLeg(ORIGIN,f.pos);};})).then(function(flashRes){return [legRes,flashRes];});
   })
   .then(function(rs){
     var legRes=rs[0],flashRes=rs[1],apiFail=false;
-    var legKm=[],legPts=[];
-    legRes.forEach(function(r,i4){
-      if(r){legKm.push(r.km);legPts.push(r.pts);}
-      else{apiFail=true;legKm.push(km(legs[i4][0],legs[i4][1])*ROAD_K);legPts.push([legs[i4][0],legs[i4][1]]);}
+    flashList.forEach(function(fl,fi){
+      var r2=flashRes[fi];
+      var dk=r2?r2.km:km(ORIGIN,fl.pos)*ROAD_K;
+      if(!r2)apiFail=true;
+      fl.price=dk<=planParams.fkm?planParams.fstart:Math.round(planParams.fstart+planParams.fper*Math.ceil(dk-planParams.fkm));
     });
-    var rideMin=legKm.reduce(function(s,k){return s+k;},0)/planParams.speed*60;
-    var delMin=groups.reduce(function(s,g){return s+g.min;},0);
-    var tot=Math.round(planParams.prep+rideMin+delMin);
-    var meals=groups.reduce(function(s,g){return s+g.meals;},0)||1;
-    // 闪送点对点参考价（不足1公里按1公里进位）
-    var flashTxt=[],fsum=0;
-    flashList.forEach(function(f,i5){
-      var r=flashRes[i5];
-      var dk=r?r.km:km(ORIGIN,f.pos)*ROAD_K;
-      if(!r) apiFail=true;
-      var price=dk<=planParams.fkm?planParams.fstart:Math.round(planParams.fstart+planParams.fper*Math.ceil(dk-planParams.fkm));
-      fsum+=price;
-      flashTxt.push(f.name+' '+price+'元');
-    });
-    var routeKm=legKm.reduce(function(s,k){return s+k;},0);
-    var van=Math.max(10.9,1.32*routeKm);
-    var finTxt='';
-    if(planParams.depart){
-      var hm=planParams.depart.split(':');
-      var t2=new Date();t2.setHours(+hm[0],+hm[1]+tot,0,0);
-      finTxt='<br>⏱ 预计送完时间：<b>'+('0'+t2.getHours()).slice(-2)+':'+('0'+t2.getMinutes()).slice(-2)+'</b>（'+planParams.depart+' 出发）';
-    }
-    var merged=groups.filter(function(g){return g.members.length>1;});
-    var mergeTxt=merged.length?merged.map(function(g){return g.members.map(function(m){return m.name;}).join(' 和 ')+'（同一目的地，按最高复杂度 '+g.min+' 分钟算一次）';}).join('；'):'无（各点独立计送达时间）';
     planLines.forEach(function(l){map.remove(l);});planLines=[];
-    legPts.forEach(function(pts){
-      if(pts.length>1) planLines.push(new AMap.Polyline({path:pts,strokeColor:'#e91e63',strokeWeight:5,strokeOpacity:.9,showDir:true,map:map,zIndex:170}));
+    var li=0,totKm=0,totMeals=0,totFlash=0,blocks=[],spTxt='';
+    specials.forEach(function(sp){
+      var fl=flashList.filter(function(x){return x.ti===-1&&x.name===sp.k.name;})[0];
+      if(fl)spTxt+=(spTxt?'；':'')+'<b>'+sp.k.name+'</b>（'+min2hm(sp.dlm)+'，闪送参考 '+fl.price+'元）';
     });
-    var cxtxt=best.map(function(oi){return glabel(oi)+'（'+groups[oi].min+'分）';}).join('、');
-    var segTxt=legs.map(function(_,i6){return stops[i6].name+'→'+stops[i6+1].name+' '+legKm[i6].toFixed(1)+'km/'+Math.round(legKm[i6]/planParams.speed*60)+'分';}).join('；');
-    pset('🛵 <b>配送顺序</b>：'+stops.map(function(s2){return s2.name;}).join(' → ')
-      +'<br>📊 共 '+live.length+' 个点、<b>'+meals+' 餐</b>'
-      +'<br>📦 <b>送达复杂度</b>：'+cxtxt
-      +'<br>🚴 <b>分段骑行</b>：'+segTxt
-      +'<br>🚴 骑行总时间：<b>'+Math.round(rideMin)+' 分钟</b>（'+planParams.speed+'km/h 实际均速）'
-      +'<br>📦 送达总时间：<b>'+delMin+' 分钟</b>'
-      +'<br>⏱ <b>总时长：'+tot+' 分钟</b>（含出发准备 '+planParams.prep+' 分钟）'
-      +finTxt
-      +'<br>⚡ <b>闪送点对点参考</b>：'+flashTxt.join('、')+'<br>　点对点加总 <b>'+fsum+' 元</b>（餐均 '+(fsum/meals).toFixed(1)+' 元/餐；仅参考，不是向客户收的配送费）'
-      +'<br>🚚 <b>货拉拉一拖N参考</b>：约 <b>'+van.toFixed(1)+' 元</b>（整趟 '+routeKm.toFixed(1)+' km，餐均约 <b>'+(van/meals).toFixed(1)+' 元/餐</b>；按实测价拟合，支持途经点）'
-      +'<br>📌 同目的地合并：'+mergeTxt
-      +(apiFail?'<br>⚠️ 高德API部分请求失败，失败段已按直线×1.35估算':'<br>📏 里程按高德步行路线测算（最接近电瓶车实际骑行路线），耗时按你设的均速换算'));
+    var prevFinish=departMin;   // 顺序班：下一趟出发＝上一趟实测回店时刻，避免估算/实测不一致
+    trips.forEach(function(tr,ti){
+      if(planParams.round&&ti>0)tr.dep=prevFinish;
+      var seq=[ORIGIN].concat(tr.seg.map(function(gi){return groups[gi].pos;}));
+      var back=planParams.round&&tr.seg.length;
+      var kmAcc=0,etas=[],clock=tr.dep+prep,stopMin=0,late=false,slack=1e9;
+      for(var q=0;q<tr.seg.length;q++){
+        var r=legRes[li++];
+        var dk=r?r.km:km(seq[q],seq[q+1])*ROAD_K;
+        if(!r)apiFail=true;
+        var mins=dk/speed*60;
+        kmAcc+=dk;clock+=mins;
+        etas.push({gi:tr.seg[q],t:clock});
+        slack=Math.min(slack,groups[tr.seg[q]].dlm-clock);
+        if(clock>groups[tr.seg[q]].dlm+0.5)late=true;
+        if(r&&r.pts&&r.pts.length>1)planLines.push(new AMap.Polyline({path:r.pts,strokeColor:TRIP_COLORS[ti%TRIP_COLORS.length],strokeWeight:5,strokeOpacity:.9,showDir:true,map:map,zIndex:170}));
+        stopMin+=groups[tr.seg[q]].min;clock+=groups[tr.seg[q]].min;
+      }
+      if(back){
+        var r2=legRes[li++];
+        var dk2=r2?r2.km:km(seq[tr.seg.length],ORIGIN)*ROAD_K;
+        if(!r2)apiFail=true;
+        kmAcc+=dk2;clock+=dk2/speed*60;
+        if(r2&&r2.pts&&r2.pts.length>1)planLines.push(new AMap.Polyline({path:r2.pts,strokeColor:TRIP_COLORS[ti%TRIP_COLORS.length],strokeWeight:5,strokeOpacity:.9,showDir:true,map:map,zIndex:170}));
+      }
+      prevFinish=clock;
+      tr.latest=(slack===1e9||slack<0)?tr.dep:tr.dep+slack;   // 最晚出发也按实测重算
+      var names=tr.seg.map(function(gi){return glabel(groups[gi]);});
+      var meals=tr.seg.reduce(function(s,gi){return s+groups[gi].meals;},0);
+      var dur=Math.round(prep+kmAcc/speed*60+stopMin);
+      var van=Math.max(10.9,1.32*kmAcc);
+      var tripFlash=0;
+      flashList.forEach(function(fl){if(fl.ti===ti)tripFlash+=fl.price;});
+      totKm+=kmAcc;totMeals+=meals;totFlash+=tripFlash;
+      var col=TRIP_COLORS[ti%TRIP_COLORS.length];
+      var adv=van>=40?'✅ ≥40元大班，可派骑手':'🙋 不足40元，建议自送/攒班';
+      blocks.push('<div style="margin:6px 0;padding:6px 8px;border:1px solid '+col+';border-radius:8px">'
+        +'<b style="color:'+col+'">🛵 第'+(ti+1)+'趟</b>（'+tr.seg.length+'点'+meals+'餐）：出餐点 → '+names.join(' → ')
+        +'<br>⏱ 出发 <b>'+min2hm(tr.dep)+'</b>｜最晚 '+min2hm(tr.latest)+' 出发｜ETA：'+etas.map(function(e2){return glabel(groups[e2.gi])+' '+min2hm(e2.t);}).join('、')
+        +'<br>📏 全线 <b>'+kmAcc.toFixed(1)+'km</b>｜用时约 <b>'+dur+'分</b>（上楼'+stopMin+'分）'+(back?'｜回店 '+min2hm(clock):'｜送完 '+min2hm(clock))
+        +'<br>💰 班价参考（货拉拉实测拟合）：'+van.toFixed(0)+'元｜餐均 '+(van/Math.max(1,meals)).toFixed(1)+'元｜闪送逐点合计 '+tripFlash+'元 → '+adv
+        +(tr.info.dur>maxTrip?'<br><span class="bad">⚠️ 超单班上限（约'+Math.round(tr.info.dur)+'分＞'+maxTrip+'分），孤点必送</span>':'')
+        +(late?'<br><span class="bad">⚠️ 按实测距离这趟有晚点风险，建议提前出发或把末点挪给别的趟</span>':'')
+        +'</div>');
+    });
+    var head='✅ <b>共 '+trips.length+' 趟</b>｜'+live.length+' 个有单点｜<b>'+totMeals+' 餐</b>｜全线 '+totKm.toFixed(1)+'km'
+      +(forceSoloWarn?'<br><span class="mid">⚠️ 时间窗约束下无法完全满足单班上限，已按「时限优先」排出（超限趟已标注）</span>':'')
+      +(planParams.round?'<br>🔁 顺序班模式：送完回店再出发下一趟（一人多趟）':'<br>🔀 并行班模式：各趟同时出发（多人各跑一条线）');
+    pset(head
+      +'<br>⚡ 闪送点对点参考合计 <b>'+totFlash+' 元</b>（餐均 '+(totFlash/Math.max(1,totMeals)).toFixed(1)+'元/餐；仅参考，不是向客户收的配送费）'
+      +(spTxt?'<br>⏰ 特殊时段单（单独送/攒批，不进本窗口）：'+spTxt:'')
+      +(warn?'<br>'+warn:'')
+      +(apiFail?'<br>⚠️ 高德API部分请求失败，失败段已按直线×1.35估算':'<br>📏 里程按高德骑行/步行路线实测，耗时按均速 '+speed+'km/h 折算')
+      +blocks.join(''));
+    window._planning=false;
   })
-  .catch(function(err){ pset('❌ 排线出错：'+(err&&err.message||err)+'<br>请刷新页面（Ctrl+F5）重试；若仍报错，把这段话截图发我。'); });
+  .catch(function(err){ pset('❌ 排线出错：'+(err&&err.message||err)+'<br>请刷新页面（Ctrl+F5）重试；若仍报错，把这段话截图发我。'); window._planning=false; });
 };
 </script>
 </body>

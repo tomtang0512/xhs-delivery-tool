@@ -57,40 +57,73 @@
   .ctag.cx.hard{background:#c0392b}
   .ctag.dl{background:#16a085}
   .ctag.dl.sp{background:#8e44ad}
-  #presult{margin-top:8px;font-size:13px;line-height:1.7;color:#333;max-height:260px;overflow:auto}
+  #presult{margin-top:8px;font-size:13px;line-height:1.7;color:#333;max-height:320px;overflow:auto;background:#fafbfc;border-radius:8px;padding:8px 10px}
+  .tabs{display:flex;gap:4px;margin:8px 0 2px}
+  .tabbtn{flex:1;padding:8px 2px;border:1px solid #e3e6ea;background:#f5f6f8;border-radius:8px;cursor:pointer;font-size:13px;color:#667;font-weight:600;font-family:inherit}
+  .tabbtn.on{background:#e91e63;border-color:#e91e63;color:#fff}
+  .tabpane{padding-top:6px}
+  .pstat{font-size:12px;color:#888;margin:4px 0;line-height:1.6}
+  .helplist{font-size:12px;color:#666;line-height:2.1}
+  @media (max-width:640px){
+    .panel{left:0;top:0;width:100%;max-width:100%;border-radius:0 0 14px 14px;max-height:60vh}
+    .panel h3{font-size:16px;margin:4px 0}
+    .tabbtn{font-size:14px;padding:11px 2px}
+    .gnum,input,select,textarea{font-size:15px}
+    #presult{max-height:36vh}
+    .citem{padding:9px 6px}
+    .cbx{width:18px;height:18px}
+    .ctag{line-height:22px;padding:0 7px}
+    .row .gnum,.row input{height:36px}
+  }
 </style>
 </head>
 <body>
 <div class="panel">
-  <h3>小红书接单范围判断</h3>
-  <div class="row">
-    <input id="addr" placeholder="输入客户地址，如：天府三街199号">
-    <button id="btn">判断</button>
+  <h3>🥗 壮壮FIT 配送助手</h3>
+  <div class="tabs">
+    <button class="tabbtn on" id="tab-plan" type="button">🛵 排线</button>
+    <button class="tabbtn" id="tab-cust" type="button">👥 客户</button>
+    <button class="tabbtn" id="tab-judge" type="button">📏 接单判断</button>
+    <button class="tabbtn" id="tab-help" type="button">📖 说明</button>
   </div>
-  <div class="row trow">
-    <select id="mealtime">
-      <option value="lunch">🥗 午餐 11:30~12:30（标准窗）</option>
-      <option value="dinner">🍗 晚餐 17:30~18:30（标准窗）</option>
-      <option value="both">🍱 午+晚 两餐都要（合送一次）</option>
-      <option value="special">⏰ 特殊时间（如14:00，加收10元）</option>
-    </select>
+  <div class="tabpane" id="pane-plan">
+    <div class="pstat">今日有单 <b id="pnum">0</b> 个点｜要改有单名单，<a href="javascript:void(0)" id="goCust" style="color:#e91e63">去客户页 →</a></div>
+    <div class="addrow" style="flex-wrap:wrap;align-items:center">
+      <select id="psession" style="flex:none">
+        <option value="lunch">🥗 午餐窗</option>
+        <option value="dinner">🍗 晚餐窗</option>
+        <option value="all">🕐 全部时段</option>
+      </select>
+      <span style="font-size:12px">速度</span><input id="pspeed" type="number" class="gnum" min="8" max="30" step="0.5">
+      <span style="font-size:12px">km/h</span>
+    </div>
+    <div class="addrow" style="flex-wrap:wrap;align-items:center">
+      <span style="font-size:12px">出发</span><input id="pdepart" type="time" class="gnum" style="width:86px">
+      <span style="font-size:12px">准备</span><input id="pprep" type="number" class="gnum" min="0" max="60">
+      <span style="font-size:12px">分</span>
+      <span style="font-size:12px">窗口截止</span><input id="pwinend" type="time" class="gnum" style="width:86px">
+      <span style="font-size:12px">弹性±</span><input id="pflex" type="number" class="gnum" min="0" max="90" style="width:52px" title="时限弹性：各点标称截止时间/窗口截止往后放宽的分钟数（默认30分，与客户约定的迟到容忍度）">
+      <span style="font-size:12px">分</span>
+    </div>
+    <div class="addrow" style="align-items:center">
+      <span style="font-size:12px">单班上限</span><input id="pmaxtrip" type="number" class="gnum" min="15" max="180">
+      <span style="font-size:12px">分</span>
+      <label style="font-size:12px;margin-left:4px"><input type="checkbox" id="pround"> 送完回店（顺序班）</label>
+      <button id="prun" style="margin-left:auto">🛵 开始排线</button>
+    </div>
+    <details style="margin-top:6px"><summary style="font-size:12px;color:#888;cursor:pointer">闪送计费参数（点对点参考价）</summary>
+      <div class="addrow" style="align-items:center">
+        <span style="font-size:12px">起步</span><input id="fstart" type="number" class="gnum" min="1">
+        <span style="font-size:12px">元 /</span><input id="fkm" type="number" class="gnum" min="1">
+        <span style="font-size:12px">km，超出</span><input id="fper" type="number" class="gnum" min="0.5" step="0.5">
+        <span style="font-size:12px">元/km</span>
+      </div>
+    </details>
+    <div id="presult">还没排线。点亮「有单」标签后点「开始排线」。</div>
   </div>
-  <div id="result">等待输入…</div>
-  <div class="hist" id="hist"></div>
-  <div class="legend">
-    <span class="lg" style="background:#27ae60"></span>8公里内：建议接，免运费（绿色圈）<br>
-    <span class="lg" style="background:#f39c12"></span>8~12公里：建议向客户加收8元运费（虚线圈）<br>
-
-    <span class="lg" style="background:#c0392b"></span>12公里以上：客户自付全额跑腿费才接<br>
-    <span class="lg" style="background:#2980b9"></span>现有客户参考点<br>
-    ⏰ 时间窗：午 11:30~12:30 / 晚 17:30~18:30；两餐合送不加钱；窗外特殊时段加收10元<br>
-    🕐 排线按每户「限XX:XX」时限＋电瓶车速＋上楼时间自动算；一趟超「单班上限」自动拆成多趟，多条线可派不同骑手同时跑<br>
-    🏋️ 健身房4店（乐刻/青度/烁屿/荟创）已并入客户档案，与散单统一排线，可按同方向顺路并车
-  </div>
-  <details class="mgmt">
-<summary>⚙️ 客户管理（<span id="cnum"></span> 家）</summary>
-<div style="font-size:12px;color:#c0392b;margin:4px 0">左侧蓝色勾选框＝批量操作用，不算有单！要点地址旁的「有单」标签变绿，才算今天要送。</div>
-<div id="clist" class="clist"></div>
+  <div class="tabpane" id="pane-cust" style="display:none">
+    <div class="pstat">共 <span id="cnum"></span> 家｜点「有单」变绿＝今天要送（左侧蓝色勾选框只是批量操作用，不算有单）｜时限点「限」标签改，餐数点「餐×N」加</div>
+    <div id="clist" class="clist"></div>
     <div class="addrow">
       <input id="cname" placeholder="客户名" style="width:70px">
       <input id="caddr" placeholder="地址，如：天府三街199号" style="flex:1">
@@ -124,43 +157,38 @@
       <textarea id="bta" placeholder="每行一个客户：名称 地址（逗号/顿号/空格分隔均可）&#10;例：&#10;张三 天府三街199号&#10;李四，凯旋南城B座1608室&#10;王五、软件园D3"></textarea>
       <div class="addrow"><button id="bgo">开始导入</button><button id="bcancel">收起</button></div>
     </div>
-  </details>
-  <details class="mgmt">
-    <summary>🛵 今日排线（<span id="pnum">0</span> 个有单点 · 多趟拆线）</summary>
-    <div style="font-size:12px;color:#888;margin:4px 0">先点亮「有单」标签，再排线。每人时限用「限」标签设置（如 限11:40），没设的按窗口截止。一条线跑不完会自动拆成多趟，每趟给出逐点 ETA 和派骑手/自送建议。</div>
-    <div class="addrow" style="flex-wrap:wrap;align-items:center">
-      <select id="psession" style="flex:none">
-        <option value="lunch">🥗 午餐窗</option>
-        <option value="dinner">🍗 晚餐窗</option>
-        <option value="all">🕐 全部时段</option>
+  </div>
+  <div class="tabpane" id="pane-judge" style="display:none">
+    <div class="row">
+      <input id="addr" placeholder="输入客户地址，如：天府三街199号">
+      <button id="btn">判断</button>
+    </div>
+    <div class="row trow">
+      <select id="mealtime">
+        <option value="lunch">🥗 午餐 11:30~12:30（标准窗）</option>
+        <option value="dinner">🍗 晚餐 17:30~18:30（标准窗）</option>
+        <option value="both">🍱 午+晚 两餐都要（合送一次）</option>
+        <option value="special">⏰ 特殊时间（如14:00，加收10元）</option>
       </select>
-      <span style="font-size:12px">速度</span><input id="pspeed" type="number" class="gnum" min="8" max="30" step="0.5">
-      <span style="font-size:12px">km/h</span>
     </div>
-    <div class="addrow" style="flex-wrap:wrap;align-items:center">
-      <span style="font-size:12px">出发</span><input id="pdepart" type="time" class="gnum" style="width:86px">
-      <span style="font-size:12px">准备</span><input id="pprep" type="number" class="gnum" min="0" max="60">
-      <span style="font-size:12px">分</span>
-      <span style="font-size:12px">窗口截止</span><input id="pwinend" type="time" class="gnum" style="width:86px">
-      <span style="font-size:12px">弹性±</span><input id="pflex" type="number" class="gnum" min="0" max="90" style="width:52px" title="时限弹性：各点标称截止时间/窗口截止往后放宽的分钟数（默认30分，与客户约定的迟到容忍度）">
-      <span style="font-size:12px">分</span>
+    <div id="result">等待输入…</div>
+    <div class="hist" id="hist"></div>
+  </div>
+  <div class="tabpane" id="pane-help" style="display:none">
+    <div class="helplist">
+      <b>接单距离</b><br>
+      🟢 8公里内：建议接，免运费（绿圈）<br>
+      🟡 8~12公里：建议向客户加收8元运费（虚线圈）<br>
+      🔴 12公里以上：客户自付全额跑腿费才接<br>
+      🔵 现有客户参考点<br>
+      <b>时间窗</b><br>
+      ⏰ 午 11:30~12:30 / 晚 17:30~18:30；两餐合送不加钱；窗外特殊时段加收10元<br>
+      <b>排线</b><br>
+      🕐 按每户「限XX:XX」时限＋车速＋上楼时间自动算；超「单班上限」自动拆多趟，多线可派不同骑手同时跑<br>
+      ⏱ 「弹性±」（默认30分）：各点时限往后放宽的分钟数，对应与客户约定的迟到容忍度；设 0 则严格卡标称时限<br>
+      🏋️ 健身房4店（乐刻/青度/烁屿/荟创）已并入客户档案，与散单统一排线
     </div>
-    <div class="addrow" style="align-items:center">
-      <span style="font-size:12px">单班上限</span><input id="pmaxtrip" type="number" class="gnum" min="15" max="180">
-      <span style="font-size:12px">分</span>
-      <label style="font-size:12px;margin-left:4px"><input type="checkbox" id="pround"> 送完回店（顺序班）</label>
-      <button id="prun" style="margin-left:auto">🛵 开始排线</button>
-    </div>
-    <details style="margin-top:6px"><summary style="font-size:12px;color:#888;cursor:pointer">闪送计费参数（点对点参考价）</summary>
-      <div class="addrow" style="align-items:center">
-        <span style="font-size:12px">起步</span><input id="fstart" type="number" class="gnum" min="1">
-        <span style="font-size:12px">元 /</span><input id="fkm" type="number" class="gnum" min="1">
-        <span style="font-size:12px">km，超出</span><input id="fper" type="number" class="gnum" min="0.5" step="0.5">
-        <span style="font-size:12px">元/km</span>
-      </div>
-    </details>
-    <div id="presult">还没排线。点亮「单」标签后点「开始排线」。</div>
-  </details>
+  </div>
 </div>
 <div id="map"></div>
 <script src="https://webapi.amap.com/maps?v=1.4.15&key=e9973067b859c02990c6b19729ffdce7"></script>
@@ -748,6 +776,16 @@ function loadP2El(){
   document.getElementById('fper').value=planParams.fper;
 }
 loadP2El();
+// 选项卡切换：排线/客户/接单判断/说明
+var TABS=['plan','cust','judge','help'];
+function showTab(id){
+  TABS.forEach(function(t){
+    document.getElementById('pane-'+t).style.display=(t===id)?'':'none';
+    document.getElementById('tab-'+t).classList.toggle('on',t===id);
+  });
+}
+TABS.forEach(function(t){document.getElementById('tab-'+t).addEventListener('click',function(){showTab(t);});});
+document.getElementById('goCust').addEventListener('click',function(){showTab('cust');});
 document.getElementById('psession').addEventListener('change',function(){
   document.getElementById('pwinend').value = this.value==='dinner' ? '18:30' : '12:30';
 });
@@ -1055,7 +1093,7 @@ document.getElementById('prun').onclick=function(){
       totKm+=kmAcc;totMeals+=meals;totFlash+=tripFlash;
       var col=TRIP_COLORS[ti%TRIP_COLORS.length];
       var adv=van>=40?'✅ ≥40元大班，可派骑手':'🙋 不足40元，建议自送/攒班';
-      blocks.push('<div style="margin:6px 0;padding:6px 8px;border:1px solid '+col+';border-radius:8px">'
+      blocks.push('<div style="margin:8px 0;padding:8px 10px;border:1px solid '+col+';border-left:5px solid '+col+';border-radius:8px;background:#fff">'
         +'<b style="color:'+col+'">🛵 第'+(ti+1)+'趟</b>（'+tr.seg.length+'点'+meals+'餐）：出餐点 → '+names.join(' → ')
         +'<br>⏱ 出发 <b>'+min2hm(tr.dep)+'</b>｜最晚 '+min2hm(tr.latest)+' 出发｜ETA：'+etas.map(function(e2){return glabel(groups[e2.gi])+' '+min2hm(e2.t);}).join('、')
         +'<br>📏 全线 <b>'+kmAcc.toFixed(1)+'km</b>｜用时约 <b>'+dur+'分</b>（上楼'+stopMin+'分）'+(back?'｜回店 '+min2hm(clock):'｜送完 '+min2hm(clock))

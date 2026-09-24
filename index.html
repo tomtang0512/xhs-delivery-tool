@@ -142,6 +142,8 @@
       <span style="font-size:12px">准备</span><input id="pprep" type="number" class="gnum" min="0" max="60">
       <span style="font-size:12px">分</span>
       <span style="font-size:12px">窗口截止</span><input id="pwinend" type="time" class="gnum" style="width:86px">
+      <span style="font-size:12px">弹性±</span><input id="pflex" type="number" class="gnum" min="0" max="90" style="width:52px" title="时限弹性：各点标称截止时间/窗口截止往后放宽的分钟数（默认30分，与客户约定的迟到容忍度）">
+      <span style="font-size:12px">分</span>
     </div>
     <div class="addrow" style="align-items:center">
       <span style="font-size:12px">单班上限</span><input id="pmaxtrip" type="number" class="gnum" min="15" max="180">
@@ -728,7 +730,7 @@ document.getElementById('creset').onclick=function(){
 
 // ===== 今日排线 v2（多骑手多趟：时间窗 + 单班上限 + 大巡游最优切割 Route-First/Cluster-Second）=====
 var MERGE_KM=0.1;   // 直线多少公里内视为同一目的地（送达时间只算一次）
-var planParams={session:'lunch',speed:20,prep:0,depart:'11:00',round:false,maxTrip:55,winEnd:'12:30',fstart:13,fkm:3,fper:2};
+var planParams={session:'lunch',speed:20,prep:0,depart:'11:00',round:false,maxTrip:55,winEnd:'12:30',flex:30,fstart:13,fkm:3,fper:2};
 try{var pp=JSON.parse(localStorage.getItem('planParams'));if(pp)planParams=Object.assign(planParams,pp);}catch(e){}
 var planLines=[];
 var TRIP_COLORS=['#e91e63','#2980b9','#27ae60','#e67e22','#8e44ad','#00838f','#c0392b','#16a085'];
@@ -739,6 +741,7 @@ function loadP2El(){
   document.getElementById('pdepart').value=planParams.depart||'';
   document.getElementById('pmaxtrip').value=planParams.maxTrip||55;
   document.getElementById('pwinend').value=planParams.winEnd||'12:30';
+  document.getElementById('pflex').value=(planParams.flex!==undefined?planParams.flex:30);
   document.getElementById('pround').checked=!!planParams.round;
   document.getElementById('fstart').value=planParams.fstart;
   document.getElementById('fkm').value=planParams.fkm;
@@ -752,7 +755,7 @@ function savePlanParams(){
   planParams={session:document.getElementById('psession').value,
     speed:+document.getElementById('pspeed').value||20,prep:+document.getElementById('pprep').value||0,
     depart:document.getElementById('pdepart').value||'',round:document.getElementById('pround').checked,
-    maxTrip:+document.getElementById('pmaxtrip').value||55,winEnd:document.getElementById('pwinend').value||'12:30',
+    maxTrip:+document.getElementById('pmaxtrip').value||55,winEnd:document.getElementById('pwinend').value||'12:30',flex:(document.getElementById('pflex').value===''?30:+document.getElementById('pflex').value)||0,
     fstart:+document.getElementById('fstart').value||13,fkm:+document.getElementById('fkm').value||3,fper:+document.getElementById('fper').value||2};
   try{localStorage.setItem('planParams',JSON.stringify(planParams));}catch(e){}
 }
@@ -798,6 +801,7 @@ document.getElementById('prun').onclick=function(){
   var departMin = planParams.depart ? hm2min(planParams.depart) : (sess==='dinner'?hm2min('17:30'):hm2min('11:00'));
   var winEndMin = planParams.winEnd ? hm2min(planParams.winEnd) : (sess==='dinner'?hm2min('18:30'):hm2min('12:30'));
   var prep=+planParams.prep||0, speed=+planParams.speed||20, maxTrip=+planParams.maxTrip||55;
+  var flex=(planParams.flex!==undefined && planParams.flex!==null)?+planParams.flex||0:30;
   var ride=function(a,b){return km(a,b)*ROAD_K/speed*60;};
 
   // 1) 分桶：习惯时段匹配 + 每户「限XX:XX」时限；窗口外的特殊时段单单独列出
@@ -806,9 +810,9 @@ document.getElementById('prun').onclick=function(){
   live.forEach(function(i){
     var k=customers[i];
     if(!sessOK(k)){excluded.push(k);return;}
-    var dlm=k.dl?hm2min(k.dl):winEndMin;
-    if(dlm>winEndMin+1){specials.push({k:k,dlm:dlm});return;}
-    mainPts.push({k:k,dlm:dlm});
+    var rawDlm=k.dl?hm2min(k.dl):winEndMin;
+    if(rawDlm>winEndMin+1){specials.push({k:k,dlm:rawDlm});return;}
+    mainPts.push({k:k,dlm:rawDlm+flex});
   });
   if(!mainPts.length){
     var m0='本时段没有可排线的点。';
@@ -1061,6 +1065,7 @@ document.getElementById('prun').onclick=function(){
         +'</div>');
     });
     var head='✅ <b>共 '+trips.length+' 趟</b>｜'+live.length+' 个有单点｜<b>'+totMeals+' 餐</b>｜全线 '+totKm.toFixed(1)+'km'
+      +(flex>0?'<br><span class="mid">⏱ 已按时限弹性放宽：各点截止时间 <b>+'+flex+' 分</b> 计算（可在上方「弹性±」调整，设 0 则严格按标称时限）</span>':'')
       +(oneTripHint||'')
       +(forceSoloWarn?'<br><span class="mid">⚠️ 时间窗约束下无法完全满足单班上限，已按「时限优先」排出（超限趟已标注）</span>':'')
       +(planParams.round?'<br>🔁 顺序班模式：送完回店再出发下一趟（一人多趟）':'<br>🔀 并行班模式：各趟同时出发（多人各跑一条线）');

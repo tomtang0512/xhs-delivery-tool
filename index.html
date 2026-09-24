@@ -98,15 +98,15 @@
       <span style="font-size:12px">km/h</span>
     </div>
     <div class="addrow" style="flex-wrap:wrap;align-items:center">
-      <span style="font-size:12px">出发</span><input id="pdepart" type="time" class="gnum" style="width:86px">
-      <span style="font-size:12px">准备</span><input id="pprep" type="number" class="gnum" min="0" max="60">
+      <span style="font-size:12px">出发</span><input id="pdepart" type="time" class="gnum" style="width:80px">
+      <span style="font-size:12px">准备</span><input id="pprep" type="number" class="gnum" min="0" max="60" style="width:48px">
       <span style="font-size:12px">分</span>
-      <span style="font-size:12px">窗口截止</span><input id="pwinend" type="time" class="gnum" style="width:86px">
-      <span style="font-size:12px">弹性±</span><input id="pflex" type="number" class="gnum" min="0" max="90" style="width:52px" title="时限弹性：各点标称截止时间/窗口截止往后放宽的分钟数（默认30分，与客户约定的迟到容忍度）">
+      <span style="font-size:12px">窗口截止</span><input id="pwinend" type="time" class="gnum" style="width:80px">
+      <span style="font-size:12px">弹性±</span><input id="pflex" type="number" class="gnum" min="0" max="90" style="width:48px" title="时限弹性：各点标称截止时间/窗口截止往后放宽的分钟数（默认30分，与客户约定的迟到容忍度）">
       <span style="font-size:12px">分</span>
     </div>
-    <div class="addrow" style="align-items:center">
-      <span style="font-size:12px">单班上限</span><input id="pmaxtrip" type="number" class="gnum" min="15" max="180">
+    <div class="addrow" style="align-items:center;flex-wrap:wrap;gap:4px 2px">
+      <span style="font-size:12px">单班上限</span><input id="pmaxtrip" type="number" class="gnum" min="15" max="180" style="width:56px">
       <span style="font-size:12px">分</span>
       <label style="font-size:12px;margin-left:4px"><input type="checkbox" id="pround"> 送完回店（顺序班）</label>
       <button id="prun" style="margin-left:auto">🛵 开始排线</button>

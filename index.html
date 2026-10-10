@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
@@ -41,15 +41,18 @@
   .cops{flex:none;white-space:nowrap}
   .crow2{display:flex;align-items:center;gap:4px;margin-top:3px;min-width:0}
   .caddr{color:#b2bec3;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
-  #bulkbox{margin-top:6px}
-  #bulkbox textarea{width:100%;box-sizing:border-box;height:90px;border:1px solid #ccc;border-radius:6px;font-size:12px;padding:6px}
+#bulkbox{margin-top:6px}
+#bulkbox textarea{width:100%;box-sizing:border-box;height:90px;border:1px solid #ccc;border-radius:6px;font-size:12px;padding:6px}
+#rptbox textarea{width:100%;box-sizing:border-box;height:150px;border:1px solid #ccc;border-radius:6px;font-size:12px;padding:6px;font-family:inherit}
+#rptout{margin-top:6px;font-size:12px;line-height:1.9;color:#333}
+#rptout .ro{padding:3px 0;border-bottom:1px dashed #eee}
+#rptout .tag{display:inline-block;border-radius:4px;padding:0 5px;line-height:16px;color:#fff;font-size:11px;vertical-align:1px}
+#rptout .cl{background:#f3f8f3;border:1px solid #dceddc;border-radius:6px;padding:4px 8px;margin:4px 0}
   .addrow{display:flex;gap:6px;margin-top:6px}
   .addrow button{border:1px solid #ccc;background:#f7f7f7;border-radius:6px;padding:4px 8px;font-size:12px;cursor:pointer}
   .addrow input{border:1px solid #ccc;border-radius:6px;padding:4px 6px;font-size:12px}
   .gnum{width:52px;border:1px solid #ccc;border-radius:6px;padding:3px 5px;font-size:12px}
   .gitem label{display:flex;align-items:center;flex:1;min-width:0;cursor:pointer}
-.ctag.sl{background:#8e44ad}
-.ctag.sl.on{background:#6c3483;outline:2px solid #d7bdf2}
 .ctag{cursor:pointer;border-radius:4px;padding:0 5px;line-height:18px;white-space:nowrap;color:#fff;background:#95a5a6;font-size:11px;flex:none}
 .ctag.cd{background:#dfe6e9;color:#2d3436;border:1px dashed #b2bec3;font-weight:bold}
 .ctag.cd.on{background:#27ae60;color:#fff;border:1px solid #27ae60}
@@ -119,6 +122,13 @@
         <span style="font-size:12px">元/km</span>
       </div>
     </details>
+    <details style="margin-top:6px"><summary style="font-size:12px;color:#888;cursor:pointer">📋 粘贴报单识别（老客/新客/成趟建议）</summary>
+      <div id="rptbox" style="margin-top:6px">
+        <textarea id="rptTxt" placeholder="把群里的报单原文整段粘进来：自动识别老客（按备注/户名/地址匹配客户库）、新客（自动定位入库参考），并给出可并趟建议。"></textarea>
+        <div class="addrow" style="margin-top:6px"><button id="rptRun">🔍 识别报单</button></div>
+        <div id="rptout"></div>
+      </div>
+    </details>
     <div id="presult">还没排线。点亮「有单」标签后点「开始排线」。</div>
   </div>
   <div class="tabpane" id="pane-cust" style="display:none">
@@ -168,7 +178,7 @@
         <option value="lunch">🥗 午餐 11:30~12:30（标准窗）</option>
         <option value="dinner">🍗 晚餐 17:30~18:30（标准窗）</option>
         <option value="both">🍱 午+晚 两餐都要（合送一次）</option>
-        <option value="special">⏰ 特殊时间（如14:00，能否接发大雄判断）</option>
+        <option value="special">⏰ 特殊时间（如14:00，加收10元）</option>
       </select>
     </div>
     <div id="result">等待输入…</div>
@@ -178,11 +188,11 @@
     <div class="helplist">
       <b>接单距离</b><br>
       🟢 8公里内：建议接，免运费（绿圈）<br>
-      🟡 8~12公里：标准窗加收8元运费（虚线圈）；「顺路」标记客户免运费<br>
+      🟡 8~12公里：建议向客户加收8元运费（虚线圈）<br>
       🔴 12公里以上：客户自付全额跑腿费才接<br>
       🔵 现有客户参考点<br>
       <b>时间窗</b><br>
-      ⏰ 午 11:30~12:30 / 晚 17:30~18:30；两餐合送不加钱；窗外特殊时段发大雄判断（可并趟免费/近单跑腿/否则补差价）<br>
+      ⏰ 午 11:30~12:30 / 晚 17:30~18:30；两餐合送不加钱；窗外特殊时段加收10元<br>
       <b>排线</b><br>
       🕐 按统一窗口截止（午12:30/晚18:30）＋车速＋上楼时间自动算；超「单班上限」自动拆多趟，多线可派不同骑手同时跑<br>
       ⏱ 「弹性±」（默认30分）：窗口截止往后放宽的分钟数，对应与客户约定的迟到容忍度；设 0 则严格卡窗口截止<br>
@@ -197,7 +207,7 @@ window.onerror=function(msg,src,line,col){window.lastErr=msg+' @'+line+':'+col;r
  // ===== 出餐点（真实店址坐标，不会漂移）=====
 var ORIGIN=[104.045634,30.557046];  // 真实出餐点：高新区荣华北路69号3栋2层（高德实测坐标）
 var ROAD_K = 1.35;          // 直线→实际道路距离的换算系数
-var NEAR_KM = 2, GREEN_KM = 8, YELLOW_KM = 12; var RED_SUBSIDY = 10;
+var GREEN_KM = 8, YELLOW_KM = 12;
 var MID_FEE = 8;   // 8~12公里向客户加收的运费
 var SPECIAL_TIME_FEE = 10;  // 标准时间窗之外的特殊时段加收
 
@@ -320,11 +330,10 @@ function renderClist(){
     var dtag='<span class="ctag cd'+(todaySel.indexOf(i)>-1?' on':'')+'" title="今日有单：点击切换（变绿=参与今天排线；蓝色勾选框不算）" data-s="'+i+'">有单</span>';
     var mtag='<span class="ctag cm" title="餐数：点击+1（到6归1），排线时统计总餐数" data-m="'+i+'">餐×'+(k.meals||1)+'</span>';
     var cxtag='<span class="ctag cx '+(k.cx||'normal')+'" title="送达复杂度：点击切换（简3分/普5分/难8分）" data-x="'+i+'">'+(CX_TXT[k.cx||'normal'])+'</span>';
-    var sltag='<span class="ctag sl'+(k.sl?' on':'')+'" title="顺路标记：点击切换。带标记的8~12km客户免运费" data-sl="'+i+'">'+(k.sl?'🚗顺路':'顺路')+'</span>';
     d.innerHTML='<input type="checkbox" class="cbx" data-c="'+i+'">'
       +'<div class="cmain">'
       +'<div class="crow1">'+dtag+'<span class="cname" title="'+((k.name||'')+(k.addr?' · '+k.addr:''))+'">'+(k.name||'')+'</span><span class="cops"><span class="ce" title="编辑名字/地址/备注" data-e="'+i+'">✏️</span><span class="cb" title="删除" data-i="'+i+'">✖</span></span></div>'
-      +'<div class="crow2">'+mtag+cxtag+sltag+tag+'<span class="caddr" title="'+(k.addr||'')+'">'+(k.addr||'')+'</span></div>'
+      +'<div class="crow2">'+mtag+cxtag+tag+'<span class="caddr" title="'+(k.addr||'')+'">'+(k.addr||'')+'</span></div>'
       +'</div>';
     el.appendChild(d);
   });
@@ -362,7 +371,7 @@ function timeNote(){
   if(v==='lunch') return '<br>⏰ 午餐标准窗（11:30~12:30），不加钱';
   if(v==='dinner') return '<br>⏰ 晚餐标准窗（17:30~18:30），不加钱';
   if(v==='both') return '<br>🍱 两餐合送：中午一趟送两份，放前台/冰箱客户晚上自取——只算一趟配送，不加钱';
-  return '<br>⏰ 特殊时段（标准窗外，午11:30~12:30 / 晚17:30~18:30）：首选劝客户改标准窗+放前台冰箱（不加钱）；坚持现送 → 发大雄判断（可并趟免费/近单跑腿/否则补差价 +'+SPECIAL_TIME_FEE+' 元）';
+  return '<br>⏰ 特殊时段（标准窗外，午11:30~12:30 / 晚17:30~18:30）：首选劝客户改标准窗+放前台冰箱（不加钱）；坚持现送则加收 '+SPECIAL_TIME_FEE+' 元/单，且该时段当天可能只有这一单＝单独跑一趟';
 }
 function timeLabel(){
   var sel=document.getElementById('mealtime');
@@ -371,14 +380,12 @@ function timeLabel(){
 function judge(p){
   var road = km(ORIGIN,p)*ROAD_K;
   var fee = 7 + 2*road;
-  if(road<=NEAR_KM) return {t:'ok', road:road, fee:fee,
-    msg:'🟢 近单直接接：约 '+road.toFixed(1)+' 公里，任何时段都接、免运费（跑腿约 '+fee.toFixed(0)+' 元，≤8元/餐成本线）'+timeNote()};
   if(road<=GREEN_KM) return {t:'ok', road:road, fee:fee,
-    msg:'🟩 标准窗可接：约 '+road.toFixed(1)+' 公里，标准窗（前日18:00前下单）免运费；时段外/截单后加单 → 发大雄判断能否并趟'+timeNote()};
+    msg:'✅ 建议接：距出餐点约 '+road.toFixed(1)+' 公里，免运费（你承担骑手费约 '+fee.toFixed(0)+' 元）'+timeNote()};
   if(road<=YELLOW_KM) return {t:'mid', road:road, fee:fee,
-    msg:'🟡 可接：约 '+road.toFixed(1)+' 公里，标准窗向客户加收运费 '+MID_FEE+' 元；客户档案带「顺路」标记的免运费；时段外/拿不准 → 发大雄'+timeNote()};
+    msg:'✅ 可接：约 '+road.toFixed(1)+' 公里，建议向客户加收运费 '+MID_FEE+' 元（你承担骑手费约 '+fee.toFixed(0)+' 元）'+timeNote()};
   return {t:'bad', road:road, fee:fee,
-    msg:'🔴 默认不接：约 '+road.toFixed(1)+' 公里。客户坚持可报价：配送费约 '+fee.toFixed(0)+' 元，门店补贴 '+RED_SUBSIDY+' 元、超出部分客户自付；不愿出就不接（老客可谈集中日送/自提）'+timeNote()};
+    msg:'💰 实报实销：约 '+road.toFixed(1)+' 公里，客户需自付全额跑腿费约 '+fee.toFixed(0)+' 元（你 0 承担）；客户不愿出就不接'+timeNote()};
 }
 
 var map = new AMap.Map('map',{zoom:12,center:[104.07,30.58],viewMode:'2D'});
@@ -418,6 +425,176 @@ function getJSON(url, retries){
   });
 }
 
+// ===== 报单识别：粘贴文本 → 老客/新客/成趟建议 =====
+function nrmTxt(s){return (s||'').toLowerCase().replace(/[\s，,。：:；;（）()【】\[\]\-—_·、.～~]/g,'');}
+function addrRuns(s){return nrmTxt(s).split(/\d+/).filter(function(x){return x.length>=3;});}
+var AREA_STOPS=['四川省','成都市','武侯区','高新区','双流区','锦江区','青羊区','金牛区','成华区','天府新区','郫都区','龙泉驿区','街道','镇','号'];
+function escHtml(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function ptimed(ms){return new Promise(function(res){setTimeout(function(){res('__timeout__');},ms);});}
+function geoOne(text){
+  var cache={}; try{cache=JSON.parse(localStorage.getItem('geoCache')||'{}');}catch(e){}
+  if(cache[text]&&cache[text].loc) return Promise.resolve(cache[text].loc);
+  function save(loc){ try{cache[text]={loc:loc,label:''};localStorage.setItem('geoCache',JSON.stringify(cache));}catch(e){} return loc; }
+  function q(t){
+    var url='https://restapi.amap.com/v3/geocode/geo?key='+KEY+'&address='+encodeURIComponent(t)+'&city='+encodeURIComponent('成都')+'&citylimit=true&output=JSON';
+    return getJSON(url).then(function(j){
+      if(j.status==='1'&&j.geocodes&&j.geocodes.length&&j.geocodes[0].location)
+        return {lng:+j.geocodes[0].location.split(',')[0],lat:+j.geocodes[0].location.split(',')[1]};
+      var url2='https://restapi.amap.com/v3/place/text?key='+KEY+'&keywords='+encodeURIComponent(t)+'&city='+encodeURIComponent('成都')+'&citylimit=true&output=JSON';
+      return getJSON(url2).then(function(j2){
+        if(j2.status==='1'&&j2.pois&&j2.pois.length&&j2.pois[0].location)
+          return {lng:+j2.pois[0].location.split(',')[0],lat:+j2.pois[0].location.split(',')[1]};
+        return null;
+      });
+    });
+  }
+  return q(text).then(function(r){ if(r) return save(r);
+    if(!/^四川省?成都市?/.test(text)) return q('成都市'+text).then(function(r2){ return r2?save(r2):null; });
+    return null;
+  });
+}
+function parseRptText(raw){
+  var lines=raw.replace(/\r/g,'').split('\n');
+  var stats={},orders=[],group='',cur=null;
+  function push(){ if(cur&&(cur.addr||cur.user||cur.dishes.length)) orders.push(cur); cur=null; }
+  for(var li=0;li<lines.length;li++){
+    var L=lines[li].trim(); if(!L) continue;
+    var m;
+    if((m=L.match(/^[-—=]{3,}\s*(.+?)\s*[-—=]{3,}$/))){ push(); group=m[1]; continue; }
+    if(/^(上午|中午|下午|晚上)/.test(L)&&L.indexOf('：')>-1&&L.indexOf('#')<0){ push(); group=L; continue; }
+    if((m=L.match(/^#(\d+)\s*（([^）]*)）?/))){ push(); cur={no:+m[1],tag:m[2]||'',dishes:[],group:group}; continue; }
+    if((m=L.match(/^#(\d+)/))){ push(); cur={no:+m[1],tag:'',dishes:[],group:group}; continue; }
+    if(!cur){
+      var mm=L.match(/^(PRO碗|EASY碗|鲜蔬锅)\s*(\d+)\s*个?$/);
+      if(mm&&group==='') stats[mm[1]]=(stats[mm[1]]||0)+(+mm[2]);
+      continue;
+    }
+    if(/^(用户|电话|地址|特殊备注)[：:]/.test(L)){
+      var k=L.match(/^(用户|电话|地址|特殊备注)/)[1], v=L.replace(/^(用户|电话|地址|特殊备注)[：:]/,'').trim();
+      if(k==='用户')cur.user=v; else if(k==='电话')cur.phone=v; else if(k==='地址')cur.addr=v; else cur.note=v;
+      continue;
+    }
+    if(!cur.user&&!/^[-—=]{3,}$/.test(L)) cur.dishes.push(L);
+  }
+  push();
+  orders.forEach(function(o){
+    var tM=(o.tag||'').match(/(\d+)\s*餐/);
+    if(tM) o.meals=+tM[1];
+    else{
+      var nC=0; o.dishes.forEach(function(d){ var c=d.match(/[①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮]/g); if(c&&c.length>nC)nC=c.length; });
+      o.meals=nC>0?nC:1;
+    }
+    var all=o.dishes.join('');
+    o.types={pro:(all.match(/PRO碗/g)||[]).length,easy:(all.match(/EASY碗/g)||[]).length,pot:(all.match(/鲜蔬锅/g)||[]).length};
+  });
+  return {title:(lines[0]||'').trim(),stats:stats,orders:orders};
+}
+function matchCustIdx(user,addr){
+  var u=nrmTxt(user).replace(/(先生|女士|小姐|同学|老师|总|哥|姐)$/,'');
+  var a=nrmTxt(addr);
+  var scored=customers.map(function(c,i){
+    var s=0;
+    var nn=nrmTxt(c.name), nt=nrmTxt(c.note);
+    if(u){
+      if(u.length>=2&&(nt.indexOf(u)>-1||nn.indexOf(u)>-1)) s+=3;
+      else if(u.length===1&&nt.indexOf(u)>-1) s+=1;
+    }
+    addrRuns(c.name).concat(addrRuns(c.addr)).forEach(function(r){
+      if(AREA_STOPS.indexOf(r)>-1) return;
+      if(a.indexOf(r)>-1) s+=2+(r.length>=5?1:0);
+    });
+    var digits=nrmTxt(c.addr).match(/\d+/g)||[];
+    if(digits.length&&!digits.some(function(d){return a.indexOf(d)>-1;})) s=Math.max(0,s-2);
+    return {i:i,s:s,c:c};
+  }).sort(function(x,y){return y.s-x.s;});
+  var top=scored[0];
+  if(!top||top.s<3) return null;
+  var amb=scored.filter(function(x){return x.s>=3&&top.s-x.s<2;}).length>1;
+  return {i:top.i,s:top.s,c:top.c,amb:amb};
+}
+function clusterRpt(list){
+  var CL=0.9,cls=[];
+  list.slice().sort(function(a,b){return hav(ORIGIN,a.pos)-hav(ORIGIN,b.pos);})
+    .forEach(function(p){
+      var hit=null;
+      cls.forEach(function(cl){ cl.forEach(function(m){ if(hav(p.pos,m.pos)<=CL) hit=cl; }); });
+      if(hit) hit.push(p); else cls.push([p]);
+    });
+  return cls;
+}
+function runRptParse(){
+  var out=document.getElementById('rptout');
+  var raw=document.getElementById('rptTxt').value;
+  if(!raw.trim()){ out.innerHTML='<span class="bad">先把报单文本粘进上面的框</span>'; return; }
+  var data=parseRptText(raw);
+  if(!data.orders.length){ out.innerHTML='<span class="bad">没解析出报单：确认每单以 #编号 开头，且有 用户：/地址： 行</span>'; return; }
+  data.orders.forEach(function(o){
+    o.match=o.addr?matchCustIdx(o.user,o.addr):null;
+    o.pos=o.match?[o.match.c.lng,o.match.c.lat]:null;
+  });
+  function render(){
+    var tot={pro:0,easy:0,pot:0,meals:0};
+    data.orders.forEach(function(o){tot.pro+=o.types.pro;tot.easy+=o.types.easy;tot.pot+=o.types.pot;tot.meals+=o.meals;});
+    var h='<div class="ro"><b>共识别 '+data.orders.length+' 单 '+tot.meals+' 餐</b>（PRO×'+tot.pro+' / EASY×'+tot.easy+' / 鲜蔬锅×'+tot.pot+'）';
+    var tM=data.title.match(/共\s*(\d+)\s*单[，,]\s*(\d+)\s*餐/);
+    if(tM&&(+tM[1]!==data.orders.length||+tM[2]!==tot.meals)) h+=' <span class="bad">⚠️ 标题写的是'+tM[1]+'单'+tM[2]+'餐，对不上，人工核一下</span>';
+    ['PRO碗','EASY碗','鲜蔬锅'].forEach(function(k){ if(data.stats[k]!==undefined){ var v=k==='PRO碗'?tot.pro:k==='EASY碗'?tot.easy:tot.pot; if(data.stats[k]!==v) h+=' <span class="bad">⚠️ '+k+'标题写'+data.stats[k]+'个/实解析'+v+'个</span>'; } });
+    h+='</div>';
+    data.orders.forEach(function(o){
+      h+='<div class="ro"><b>#'+o.no+'</b> '+escHtml(o.user||'未留名')+' ';
+      if(o.match) h+='<span class="tag" style="background:'+(o.match.amb?'#f39c12':'#27ae60')+'">'+(o.match.amb?'疑似':'')+'老客·'+escHtml(o.match.c.name)+'</span>'+(todaySel.indexOf(o.match.i)>-1?'<span class="ok">✓已有单</span>':'');
+      else if(o.geoFail) h+='<span class="tag" style="background:#c0392b">新客·定位失败</span>';
+      else if(o.pos) h+='<span class="tag" style="background:#e67e22">🆕新客</span>';
+      else h+='<span class="tag" style="background:#95a5a6">新客·定位中…</span>';
+      h+=' 🍱×'+o.meals+(o.types.pro?' ·PRO×'+o.types.pro:'')+(o.types.easy?' ·EASY×'+o.types.easy:'')+(o.types.pot?' ·鲜蔬锅×'+o.types.pot:'')+(o.tag?' ·⏱'+escHtml(o.tag):'')+(o.group?' ·'+escHtml(o.group):'')+'<br><span style="color:#999">'+escHtml(o.addr||'')+'</span>'+(o.note&&o.note!=='无'?' <span class="bad">❗'+escHtml(o.note)+'</span>':'')+'</div>';
+    });
+    if(rptCls){
+      h+='<div style="margin-top:6px"><b>🚗 成趟建议</b>（直线相距≤0.9km 归为同一波）</div>';
+      rptCls.forEach(function(cl,ci){
+        var span=0; cl.forEach(function(a){cl.forEach(function(b){var d=hav(a.pos,b.pos);if(d>span)span=d;});});
+        h+='<div class="cl">波'+(ci+1)+'（'+cl.length+'点，波内最大相距 '+span.toFixed(1)+'km）：'+cl.map(function(p){return '#'+p.no+' '+(p.match?'<span class="ok">'+escHtml(p.match.c.name)+'</span>':'🆕'+escHtml(p.user||''));}).join(' + ')+'</div>';
+      });
+      var near=[]; rptCls.forEach(function(cl){ for(var i=0;i<cl.length;i++)for(var j=i+1;j<cl.length;j++){ var d=hav(cl[i].pos,cl[j].pos); if(d<=0.4) near.push('#'+cl[i].no+'+#'+cl[j].no+'（'+d.toFixed(2)+'km）'); } });
+      h+=(near.length?'<div class="cl">⭕ 可合并叫单（同址/超近）：'+near.join('、')+'</div>':'');
+    }
+    var need=data.orders.filter(function(o){return o.match&&todaySel.indexOf(o.match.i)<0;});
+    if(need.length&&!rptMarked) h+='<div style="margin-top:6px"><button id="rptMark" class="">✅ 把识别到的 '+need.length+' 家老客点亮为今日有单</button></div>';
+    out.innerHTML=h;
+    var mb=document.getElementById('rptMark');
+    if(mb) mb.addEventListener('click',function(){
+      data.orders.forEach(function(o){ if(o.match&&todaySel.indexOf(o.match.i)<0) todaySel.push(o.match.i); });
+      saveToday(); renderClist(); updatePnum();
+      rptMarked=true; render();
+    });
+  }
+  var rptCls=null,rptMarked=false;
+  render();
+  var news=data.orders.filter(function(o){return !o.match&&o.addr;});
+  if(news.length){
+    out.innerHTML+='<div id="rptProg" style="color:#888">🆕 新客地址定位中…（0/'+news.length+'）</div>';
+    (function next(k){
+      if(k>=news.length){
+        var withPos=news.filter(function(o){return o.pos;});
+        rptCls=clusterRpt(data.orders.filter(function(o){return o.pos;}));
+        render(); return;
+      }
+      var pr=document.getElementById('rptProg');
+      if(pr) pr.textContent='🆕 新客地址定位中…（'+k+'/'+news.length+'）：'+news[k].addr.slice(0,20);
+      Promise.race([geoOne(news[k].addr),ptimed(15000)]).then(function(r){
+        if(r==='__timeout__') return Promise.race([geoOne(news[k].addr),ptimed(15000)]);
+        return r;
+      }).then(function(r){
+        news[k].pos=(r&&r!=='__timeout__')?r:null;
+        if(!news[k].pos) news[k].geoFail=true;
+        next(k+1);
+      }).catch(function(){ news[k].geoFail=true; next(k+1); });
+    })(0);
+  } else {
+    rptCls=clusterRpt(data.orders.filter(function(o){return o.pos;}));
+    render();
+  }
+}
+document.getElementById('rptRun').addEventListener('click',runRptParse);
 function locate(text){
   setResult('查询中…');
   // 本地缓存：同一地址不重复请求
@@ -541,12 +718,6 @@ document.getElementById('clist').addEventListener('click',function(e){
     var seq=['easy','normal','hard'];
     var cur=seq.indexOf(customers[i4].cx||'normal');
     customers[i4].cx=seq[(cur+1)%3];
-    saveCust(); renderClist();
-    return;
-  }
-  if(t.classList.contains('sl')){
-    var i8=+t.getAttribute('data-sl');
-    customers[i8].sl=!customers[i8].sl;
     saveCust(); renderClist();
     return;
   }

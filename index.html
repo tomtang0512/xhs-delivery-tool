@@ -163,7 +163,7 @@
     </div>
     <div class="addrow"><button id="cbulk" style="flex:1">📋 批量添加（粘贴多行名单）</button></div>
     <div id="bulkbox" style="display:none">
-      <textarea id="bta" placeholder="每行一个客户：名称 地址（逗号/顿号/空格分隔均可）&#10;例：&#10;张三 天府三街199号&#10;李四，凯旋南城B座1608室&#10;王五、软件园D3"></textarea>
+      <textarea id="bta" placeholder="每行一个客户：名称 地址（逗号/顿号/空格分隔均可）&#10;例：&#10;张三 天府三街199号&#10;李四，凯旋南城B座1608室&#10;王五、软件园D3&#10;（误粘报单原文也不怕：电话/菜品/统计行会自动跳过）"></textarea>
       <div class="addrow"><button id="bgo">开始导入</button><button id="bcancel">收起</button></div>
     </div>
   </div>
@@ -244,6 +244,27 @@ var DEFAULT_CUSTOMERS = [
 var CUST_VER = 4;   // 点位库版本：以后改了 DEFAULT_CUSTOMERS 就把这里 +1，老浏览器打开会弹同步提示（v4：取消逐户时限，统一标准窗口）
 function getVer(){ try{ var v=parseInt(localStorage.getItem('cust_ver'),10); return isNaN(v)?0:v; }catch(e){ return 0; } }
 function setVer(v){ try{ localStorage.setItem('cust_ver', String(v)); }catch(e){} }
+// 报单原文粘贴进批量名单时的垃圾行识别（电话/菜品/统计行等，不是真实客户）
+function isJunkLine(s){
+  if(!s) return false;
+  if(/^(用户|电话|地址|特殊备注|餐型统计|餐型|备注|报单|统计|出餐点?时间|司机|骑手)\s*[：:]/.test(s)) return true;
+  if(/^[①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳]/.test(s)) return true;
+  if(/^[-—=_·~]{3,}/.test(s)) return true;
+  if(/^[#＃]\d/.test(s)) return true;
+  if(/^(上午|中午|下午|晚上|凌晨|今天|明天)/.test(s)) return true;
+  if(/(共|合计)\s*\d+\s*单/.test(s)) return true;
+  if(/（[^（）]{0,6}[，,]\s*\d\s*餐\s*）/.test(s)) return true;  // （张永健，2餐）类菜品注记
+  if(/^(PRO|EASY)\s*(碗|盒|餐)?$/i.test(s.trim())||/^鲜蔬锅?$/.test(s.trim())) return true;  // 纯餐型行
+  if(/#[^\d\s]/.test(s)) return true;  // #后接非数字（如 贵州酸汤黑鱼#鲜辣锅）
+  return false;
+}
+function isJunkCust(c){
+  var s=((c&&c.name)||'');
+  if(isJunkLine(s)) return true;
+  // 地址字段里出现「电话：」或「用户：」前缀也判定为误导入
+  if(/^(电话|用户)\s*[：:]/.test((c&&c.addr)||'')) return true;
+  return false;
+}
 function loadCust(){
   try{
     var s=JSON.parse(localStorage.getItem('customers'));
@@ -254,6 +275,9 @@ function loadCust(){
         var d=DEFAULT_CUSTOMERS.filter(function(x){return x.name===e.name;})[0];
         if(!e.addr && d) e.addr=d.addr;
       });
+      var n0=s.length;
+      s=s.filter(function(e){return !isJunkCust(e);});
+      if(s.length!==n0) setTimeout(function(){ try{saveCust();}catch(e){} },0);
       return s;
     }
   }catch(e){}
@@ -834,18 +858,20 @@ document.getElementById('bcancel').onclick=function(){
   document.getElementById('cbulk').textContent='📋 批量添加（粘贴多行名单）';
 };
 document.getElementById('bgo').onclick=function(){
-  var lines=document.getElementById('bta').value.split(/\r?\n/).map(function(s){return s.trim();}).filter(Boolean);
-  if(!lines.length){ alert('先粘贴客户名单，每行一个：名称 地址'); return; }
-  var btn=this; btn.disabled=true;
-  var ok=0, fail=[], idx=0;
-  function next(){
-    if(idx>=lines.length){
-      btn.disabled=false; btn.textContent='开始导入';
-      saveCust(); renderCustomers(); renderClist();
-      document.getElementById('bta').value='';
-      alert('导入完成：成功 '+ok+' 家'+(fail.length ? '，失败 '+fail.length+' 家（没定位到）：'+fail.join('、') : ''));
-      return;
-    }
+var all=document.getElementById('bta').value.split(/\r?\n/).map(function(s){return s.trim();}).filter(Boolean);
+var lines=all.filter(function(s){return !isJunkLine(s);});
+var junkN=all.length-lines.length;
+if(!lines.length){ alert('没有可导入的客户行' + (junkN ? '（'+junkN+' 行是报单原文/电话/菜品等，已自动跳过）' : '') + '。每行一个：名称 地址'); return; }
+var btn=this; btn.disabled=true;
+var ok=0, fail=[], idx=0;
+function next(){
+if(idx>=lines.length){
+btn.disabled=false; btn.textContent='开始导入';
+saveCust(); renderCustomers(); renderClist();
+document.getElementById('bta').value='';
+alert('导入完成：成功 '+ok+' 家'+(fail.length ? '，失败 '+fail.length+' 家（没定位到）：'+fail.join('、') : '')+(junkN ? '。另自动跳过 '+junkN+' 行报单原文（电话/菜品/统计行）' : ''));
+return;
+}
     btn.textContent='导入中 '+(idx+1)+'/'+lines.length;
     var pr=parseLine(lines[idx]);
     geoOnce(pr[1]).then(function(r){

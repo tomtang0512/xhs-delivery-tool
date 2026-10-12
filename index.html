@@ -89,48 +89,47 @@
     <button class="tabbtn" id="tab-judge" type="button">📏 接单判断</button>
     <button class="tabbtn" id="tab-help" type="button">📖 说明</button>
   </div>
-  <div class="tabpane" id="pane-plan">
-    <div class="pstat">今日有单 <b id="pnum">0</b> 个点｜要改有单名单，<a href="javascript:void(0)" id="goCust" style="color:#e91e63">去客户页 →</a></div>
-    <div class="addrow" style="flex-wrap:wrap;align-items:center">
-      <select id="psession" style="flex:none">
-        <option value="lunch">🥗 午餐窗</option>
-        <option value="dinner">🍗 晚餐窗</option>
-        <option value="all">🕐 全部时段</option>
-      </select>
-      <span style="font-size:12px">速度</span><input id="pspeed" type="number" class="gnum" min="8" max="30" step="0.5">
-      <span style="font-size:12px">km/h</span>
-    </div>
-    <div class="addrow" style="flex-wrap:wrap;align-items:center">
-      <span style="font-size:12px">出发</span><input id="pdepart" type="time" class="gnum" style="width:80px">
-      <span style="font-size:12px">准备</span><input id="pprep" type="number" class="gnum" min="0" max="60" style="width:48px">
-      <span style="font-size:12px">分</span>
-      <span style="font-size:12px">窗口截止</span><input id="pwinend" type="time" class="gnum" style="width:80px">
-      <span style="font-size:12px">弹性±</span><input id="pflex" type="number" class="gnum" min="0" max="90" style="width:48px" title="时限弹性：窗口截止往后放宽的分钟数（默认30分，与客户约定的迟到容忍度）">
-      <span style="font-size:12px">分</span>
-    </div>
-    <div class="addrow" style="align-items:center;flex-wrap:wrap;gap:4px 2px">
-      <span style="font-size:12px">单班上限</span><input id="pmaxtrip" type="number" class="gnum" min="15" max="180" style="width:56px">
-      <span style="font-size:12px">分</span>
-      <label style="font-size:12px;margin-left:4px"><input type="checkbox" id="pround"> 送完回店（顺序班）</label>
-      <button id="prun" style="margin-left:auto">🛵 开始排线</button>
-    </div>
-    <details style="margin-top:6px"><summary style="font-size:12px;color:#888;cursor:pointer">闪送计费参数（点对点参考价）</summary>
-      <div class="addrow" style="align-items:center">
-        <span style="font-size:12px">起步</span><input id="fstart" type="number" class="gnum" min="1">
-        <span style="font-size:12px">元 /</span><input id="fkm" type="number" class="gnum" min="1">
-        <span style="font-size:12px">km，超出</span><input id="fper" type="number" class="gnum" min="0.5" step="0.5">
-        <span style="font-size:12px">元/km</span>
-      </div>
-    </details>
-    <details style="margin-top:6px"><summary style="font-size:12px;color:#888;cursor:pointer">📋 粘贴报单识别（老客/新客/成趟建议）</summary>
-      <div id="rptbox" style="margin-top:6px">
-        <textarea id="rptTxt" placeholder="把群里的报单原文整段粘进来：自动识别老客（按备注/户名/地址匹配客户库）、新客（自动定位入库参考），并给出可并趟建议。"></textarea>
-        <div class="addrow" style="margin-top:6px"><button id="rptRun">🔍 识别报单</button></div>
-        <div id="rptout"></div>
-      </div>
-    </details>
-    <div id="presult">还没排线。点亮「有单」标签后点「开始排线」。</div>
-  </div>
+<div class="tabpane" id="pane-plan">
+<div class="pstat">今日有单 <b id="pnum">0</b> 个点｜要改有单名单，<a href="javascript:void(0)" id="goCust" style="color:#e91e63">去客户页 →</a></div>
+<div id="rptbox">
+<textarea id="rptTxt" placeholder="把群里的报单原文整段粘进来，点「识别报单」→ 自动分老客/新客，并给出可并趟建议"></textarea>
+<div class="addrow" style="margin-top:6px"><button id="rptRun" style="flex:1;background:#c0392b;color:#fff;border:0;font-weight:bold">🔍 识别报单</button><button id="prun" style="flex:1;background:#27ae60;color:#fff;border:0;font-weight:bold">🛵 开始排线</button></div>
+<div id="rptout"></div>
+</div>
+<div class="addrow" style="align-items:center">
+<select id="psession" style="flex:none">
+<option value="lunch">🥗 午餐窗</option>
+<option value="dinner">🍗 晚餐窗</option>
+<option value="all">🕐 全部时段</option>
+</select>
+</div>
+<details style="margin-top:6px"><summary style="font-size:12px;color:#888;cursor:pointer">⚙️ 排线参数（默认值可直接排，一般不用动）</summary>
+<div class="addrow" style="flex-wrap:wrap;align-items:center">
+<span style="font-size:12px">速度</span><input id="pspeed" type="number" class="gnum" min="8" max="30" step="0.5">
+<span style="font-size:12px">km/h</span>
+<span style="font-size:12px;margin-left:8px">出发</span><input id="pdepart" type="time" class="gnum" style="width:80px">
+<span style="font-size:12px">准备</span><input id="pprep" type="number" class="gnum" min="0" max="60" style="width:48px">
+<span style="font-size:12px">分</span>
+</div>
+<div class="addrow" style="flex-wrap:wrap;align-items:center">
+<span style="font-size:12px">窗口截止</span><input id="pwinend" type="time" class="gnum" style="width:80px">
+<span style="font-size:12px">弹性±</span><input id="pflex" type="number" class="gnum" min="0" max="90" style="width:48px" title="时限弹性：窗口截止往后放宽的分钟数（默认30分，与客户约定的迟到容忍度）">
+<span style="font-size:12px">分</span>
+</div>
+<div class="addrow" style="align-items:center;flex-wrap:wrap;gap:4px 2px">
+<span style="font-size:12px">单班上限</span><input id="pmaxtrip" type="number" class="gnum" min="15" max="180" style="width:56px">
+<span style="font-size:12px">分</span>
+<label style="font-size:12px;margin-left:4px"><input type="checkbox" id="pround"> 送完回店（顺序班）</label>
+</div>
+<div class="addrow" style="align-items:center">
+<span style="font-size:12px">闪送计费：起步</span><input id="fstart" type="number" class="gnum" min="1">
+<span style="font-size:12px">元 /</span><input id="fkm" type="number" class="gnum" min="1">
+<span style="font-size:12px">km，超出</span><input id="fper" type="number" class="gnum" min="0.5" step="0.5">
+<span style="font-size:12px">元/km</span>
+</div>
+</details>
+<div id="presult">还没排线。粘报单点「识别」或去客户页点亮「有单」后点「开始排线」。</div>
+</div>
   <div class="tabpane" id="pane-cust" style="display:none">
     <div class="pstat">共 <span id="cnum"></span> 家｜点「有单」变绿＝今天要送（左侧蓝色勾选框只是批量操作用，不算有单）｜点「午餐/晚餐」标签可切换时段，餐数点「餐×N」加</div>
     <div id="clist" class="clist"></div>

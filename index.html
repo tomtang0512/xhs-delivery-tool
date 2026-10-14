@@ -1139,12 +1139,13 @@ document.getElementById('prun').onclick=function(){
     if(planParams.round&&ord.length){var tr=ride(cur,ORIGIN);dur+=tr;kmAcc+=tr*speed/60;finish+=tr;}
     return {ok:ok,dur:dur,km:kmAcc,arr:arr,finish:finish};
   }
-  // 6) 最优切割 DP：f[i]＝前 i 点最少几趟（趟数相同时取总时长最短）；并行班每趟同刻出发，顺序班接力出发
+  // 6) 最优切割 DP：先最少「超限分钟」，再最少趟数，再总时长最短；并行班每趟同刻出发，顺序班接力出发
+  //    （超限分钟 = 各趟 max(0,用时-单班上限) 之和：远点孤点必送时，优先让大簇自成一趟≤上限，而不是全簇陪远点绕路）
   function cutDP(forceSolo){
     var INF=1e9;
-    var f=[{t:0,end:departMin,d:0}],cut=[-1];
+    var f=[{v:0,t:0,end:departMin,d:0}],cut=[-1];
     for(var i=1;i<=n;i++){
-      f[i]={t:INF,end:INF,d:INF};
+      f[i]={v:INF,t:INF,end:INF,d:INF};
       for(var j=0;j<i;j++){
         if(f[j].t>=INF)continue;
         var dep=planParams.round?f[j].end:departMin;
@@ -1152,8 +1153,8 @@ document.getElementById('prun').onclick=function(){
         var info=segInfo(seg,dep);
         var okk=info.ok&&(info.dur<=maxTrip||forceSolo);   // 兜底：时限可行的趟即使超单班上限也放行
         if(!okk)continue;
-        var cand={t:f[j].t+1,end:info.finish,d:f[j].d+info.dur};
-        if(cand.t<f[i].t||(cand.t===f[i].t&&(planParams.round?cand.end<f[i].end:cand.d<f[i].d))){f[i]=cand;cut[i]=j;}
+        var cand={v:f[j].v+Math.max(0,info.dur-maxTrip),t:f[j].t+1,end:info.finish,d:f[j].d+info.dur};
+        if(cand.v<f[i].v||(cand.v===f[i].v&&(cand.t<f[i].t||(cand.t===f[i].t&&(planParams.round?cand.end<f[i].end:cand.d<f[i].d))))){f[i]=cand;cut[i]=j;}
       }
     }
     return f[n].t>=INF?null:{f:f,cut:cut};
@@ -1226,7 +1227,7 @@ document.getElementById('prun').onclick=function(){
     var infoAll=segInfo(tour,departMin);
     var durAll=Math.round(infoAll.dur);
     if(infoAll.ok){
-      if(durAll>maxTrip) oneTripHint='<br>💡 <b>已排线的点其实可 1 趟跑完</b>（全程约 '+durAll+' 分，各点时限都赶得上），只是超了「单班上限」'+maxTrip+' 分才拆线——把「单班上限」调到 ≥'+durAll+' 即可 1 趟';
+      if(durAll>maxTrip&&durAll<=maxTrip*1.5) oneTripHint='<br>💡 <b>已排线的点其实可 1 趟跑完</b>（全程约 '+durAll+' 分，各点时限都赶得上），只是超了「单班上限」'+maxTrip+' 分才拆线——把「单班上限」调到 ≥'+durAll+' 即可 1 趟';
     }else{
       var lateBy=0;
       infoAll.arr.forEach(function(a,q){ lateBy=Math.max(lateBy,a-groups[tour[q]].dlm); });
@@ -1303,7 +1304,7 @@ document.getElementById('prun').onclick=function(){
         +'<br>⏱ 出发 <b>'+min2hm(tr.dep)+'</b>｜最晚 '+min2hm(tr.latest)+' 出发｜ETA：'+etas.map(function(e2){return glabel(groups[e2.gi])+' '+min2hm(e2.t);}).join('、')
         +'<br>📏 全线 <b>'+kmAcc.toFixed(1)+'km</b>｜用时约 <b>'+dur+'分</b>（上楼'+stopMin+'分）'+(back?'｜回店 '+min2hm(clock):'｜送完 '+min2hm(clock))
         +'<br>💰 班价参考（货拉拉实测拟合）：'+van.toFixed(0)+'元｜餐均 '+(van/Math.max(1,meals)).toFixed(1)+'元｜闪送逐点合计 '+tripFlash+'元 → '+adv
-        +(tr.info.dur>maxTrip?'<br><span class="bad">⚠️ 超单班上限（约'+Math.round(tr.info.dur)+'分＞'+maxTrip+'分），孤点必送</span>':'')
+        +(dur>maxTrip?'<br><span class="bad">⚠️ 超单班上限（实测约'+dur+'分＞'+maxTrip+'分），孤点必送</span>':'')
         +(late?'<br><span class="bad">⚠️ 按实测距离这趟有晚点风险，建议提前出发或把末点挪给别的趟</span>':'')
         +'</div>');
     });

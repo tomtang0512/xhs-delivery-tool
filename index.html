@@ -1055,6 +1055,12 @@ document.getElementById('prun').onclick=function(){
   var prep=+planParams.prep||0, speed=+planParams.speed||20, maxTrip=+planParams.maxTrip||55;
   var flex=(planParams.flex!==undefined && planParams.flex!==null)?+planParams.flex||0:30;
   var ride=function(a,b){return km(a,b)*ROAD_K/speed*60;};
+// 骑手查表班价（《配送内部小抄 v2》）：点数×全线公里交叉查表，整趟一口价；1km 内并点已在排线分组时完成
+var RIDER_TAB=[[15,20,25,30,35],[25,30,35,40,45],[30,35,40,45,50],[35,40,45,50,55]];
+function riderPrice(pts,kmOut){
+  var pb=pts<=2?0:pts<=4?1:pts<=6?2:3, kb=kmOut<=3?0:kmOut<=8?1:kmOut<=13?2:kmOut<=18?3:4;
+  return {p:RIDER_TAB[pb][kb],cap:pts>8||kmOut>22};
+}
 
   // 1) 分桶：习惯时段匹配；送达截止统一按「窗口截止＋弹性」
   var sessOK=function(k){var t=k.t||'';return sess==='all'||t===''||t==='b'||t===(sess==='lunch'?'l':'d');};
@@ -1262,7 +1268,7 @@ document.getElementById('prun').onclick=function(){
       fl.price=dk<=planParams.fkm?planParams.fstart:Math.round(planParams.fstart+planParams.fper*Math.ceil(dk-planParams.fkm));
     });
     planLines.forEach(function(l){map.remove(l);});planLines=[];
-    var li=0,totKm=0,totMeals=0,totFlash=0,blocks=[];
+    var li=0,totKm=0,totMeals=0,totFlash=0,totRider=0,blocks=[];
     var prevFinish=departMin;   // 顺序班：下一趟出发＝上一趟实测回店时刻，避免估算/实测不一致
     trips.forEach(function(tr,ti){
       if(planParams.round&&ti>0)tr.dep=prevFinish;
@@ -1281,6 +1287,7 @@ document.getElementById('prun').onclick=function(){
         if(r&&r.pts&&r.pts.length>1)planLines.push(new AMap.Polyline({path:r.pts,strokeColor:TRIP_COLORS[ti%TRIP_COLORS.length],strokeWeight:5,strokeOpacity:.9,showDir:true,map:map,zIndex:170}));
         stopMin+=groups[tr.seg[q]].min;clock+=groups[tr.seg[q]].min;
       }
+      var kmOut=kmAcc;   // 计价全线＝店到最后一点，回程不计价
       if(back){
         var r2=legRes[li++];
         var dk2=r2?r2.km:km(seq[tr.seg.length],ORIGIN)*ROAD_K;
@@ -1293,22 +1300,26 @@ document.getElementById('prun').onclick=function(){
       var names=tr.seg.map(function(gi){return glabel(groups[gi]);});
       var meals=tr.seg.reduce(function(s,gi){return s+groups[gi].meals;},0);
       var dur=Math.round(prep+kmAcc/speed*60+stopMin);
-      var van=Math.max(10.9,1.32*kmAcc);
       var tripFlash=0;
       flashList.forEach(function(fl){if(fl.ti===ti)tripFlash+=fl.price;});
       totKm+=kmAcc;totMeals+=meals;totFlash+=tripFlash;
       var col=TRIP_COLORS[ti%TRIP_COLORS.length];
-      var adv=van>=40?'✅ ≥40元大班，可派骑手':'🙋 不足40元，建议自送/攒班';
+      // 骑手查表班价（《配送内部小抄 v2》）：点数×全线公里交叉查表，整趟一口价；闸门：餐数×5≥班价
+      var rp=riderPrice(tr.seg.length,kmOut);
+      var gateOk=meals*5>=rp.p;
+      var adv=gateOk?'✅ 过闸（'+meals+'餐×5≥班价'+rp.p+'）可派骑手':'⚠️ 未过闸（'+meals+'餐×5＜班价'+rp.p+'），建议自送/攒班';
+      totRider+=rp.p;
       blocks.push('<div style="margin:8px 0;padding:8px 10px;border:1px solid '+col+';border-left:5px solid '+col+';border-radius:8px;background:#fff">'
         +'<b style="color:'+col+'">🛵 第'+(ti+1)+'趟</b>（'+tr.seg.length+'点'+meals+'餐）：出餐点 → '+names.join(' → ')
         +'<br>⏱ 出发 <b>'+min2hm(tr.dep)+'</b>｜最晚 '+min2hm(tr.latest)+' 出发｜ETA：'+etas.map(function(e2){return glabel(groups[e2.gi])+' '+min2hm(e2.t);}).join('、')
-        +'<br>📏 全线 <b>'+kmAcc.toFixed(1)+'km</b>｜用时约 <b>'+dur+'分</b>（上楼'+stopMin+'分）'+(back?'｜回店 '+min2hm(clock):'｜送完 '+min2hm(clock))
-        +'<br>💰 班价参考（货拉拉实测拟合）：'+van.toFixed(0)+'元｜餐均 '+(van/Math.max(1,meals)).toFixed(1)+'元｜闪送逐点合计 '+tripFlash+'元 → '+adv
+        +'<br>📏 计价全线 <b>'+kmOut.toFixed(1)+'km</b>（店→末点，回程不计价）｜用时约 <b>'+dur+'分</b>（上楼'+stopMin+'分）'+(back?'｜回店 '+min2hm(clock):'｜送完 '+min2hm(clock))
+        +'<br>💰 骑手班价：整趟一口价 <b>'+rp.p+'元</b>（'+tr.seg.length+'点×'+(kmOut<=3?'≤3':kmOut<=8?'4~8':kmOut<=13?'9~13':kmOut<=18?'14~18':'19~22')+'km 档'+(rp.cap?'，超表按顶档':'')+'）｜餐均 '+(rp.p/Math.max(1,meals)).toFixed(1)+'元｜闪送逐点合计 '+tripFlash+'元 → '+adv
+        +'<br>📋 发骑手文案：'+tr.seg.length+' 个点、全线 '+kmOut.toFixed(1)+' 公里、约 '+dur+' 分钟、整趟 '+rp.p+' 元'
         +(dur>maxTrip?'<br><span class="bad">⚠️ 超单班上限（实测约'+dur+'分＞'+maxTrip+'分），孤点必送</span>':'')
         +(late?'<br><span class="bad">⚠️ 按实测距离这趟有晚点风险，建议提前出发或把末点挪给别的趟</span>':'')
         +'</div>');
     });
-    var head='✅ <b>共 '+trips.length+' 趟</b>｜'+live.length+' 个有单点｜<b>'+totMeals+' 餐</b>｜全线 '+totKm.toFixed(1)+'km'
+    var head='✅ <b>共 '+trips.length+' 趟</b>｜'+live.length+' 个有单点｜<b>'+totMeals+' 餐</b>｜全线 '+totKm.toFixed(1)+'km｜<b>跑腿班价合计 '+totRider+' 元</b>'
       +(flex>0?'<br><span class="mid">⏱ 已按时限弹性放宽：各点截止 <b>'+min2hm(winEndMin)+'+'+flex+' 分</b> 计算（可在上方「弹性±」调整，设 0 则严格卡窗口截止）</span>':'')
       +(oneTripHint||'')
       +(forceSoloWarn?'<br><span class="mid">⚠️ 时间窗约束下无法完全满足单班上限，已按「时限优先」排出（超限趟已标注）</span>':'')

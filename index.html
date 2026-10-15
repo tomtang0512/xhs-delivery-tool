@@ -82,7 +82,7 @@
 </head>
 <body>
 <div class="panel">
-  <h3>🥗 壮壮FIT 配送助手</h3>
+  <h3>🥗 壮壮FIT 配送助手 <span id="verTag" style="font-size:11px;color:#999;font-weight:normal">v2.12</span></h3>
   <div class="tabs">
     <button class="tabbtn on" id="tab-plan" type="button">🛵 排线</button>
     <button class="tabbtn" id="tab-cust" type="button">👥 客户</button>
@@ -575,11 +575,12 @@ function autoMergeAndRoute(data){
   return {lit:lit,added:added,merged:merged};
 }
 function runRptParse(){
-  var out=document.getElementById('rptout');
+window.__rptBusy=true;   // 识别+新客定位期间挡住「开始排线」，完成后释放并自动排线
+var out=document.getElementById('rptout');
   var raw=document.getElementById('rptTxt').value;
-  if(!raw.trim()){ out.innerHTML='<span class="bad">先把报单文本粘进上面的框</span>'; return; }
+  if(!raw.trim()){ out.innerHTML='<span class="bad">先把报单文本粘进上面的框</span>'; window.__rptBusy=false; return; }
   var data=parseRptText(raw);
-  if(!data.orders.length){ out.innerHTML='<span class="bad">没解析出报单：确认每单以 #编号 开头，且有 用户：/地址： 行</span>'; return; }
+  if(!data.orders.length){ out.innerHTML='<span class="bad">没解析出报单：确认每单以 #编号 开头，且有 用户：/地址： 行</span>'; window.__rptBusy=false; return; }
   data.orders.forEach(function(o){
     o.match=o.addr?matchCustIdx(o.user,o.addr):null;
     o.pos=o.match?[o.match.c.lng,o.match.c.lat]:null;
@@ -621,9 +622,10 @@ function runRptParse(){
     (function next(k){
       if(k>=news.length){
         var withPos=news.filter(function(o){return o.pos;});
-        rptCls=clusterRpt(data.orders.filter(function(o){return o.pos;}));
-        mergeInfo=autoMergeAndRoute(data);
-        render(); return;
+rptCls=clusterRpt(data.orders.filter(function(o){return o.pos;}));
+window.__rptBusy=false;
+mergeInfo=autoMergeAndRoute(data);
+render(); return;
       }
       var pr=document.getElementById('rptProg');
       if(pr) pr.textContent='🆕 新客地址定位中…（'+k+'/'+news.length+'）：'+news[k].addr.slice(0,20);
@@ -637,10 +639,11 @@ function runRptParse(){
       }).catch(function(){ news[k].geoFail=true; next(k+1); });
     })(0);
   } else {
-    rptCls=clusterRpt(data.orders.filter(function(o){return o.pos;}));
-    mergeInfo=autoMergeAndRoute(data);
-    render();
-  }
+rptCls=clusterRpt(data.orders.filter(function(o){return o.pos;}));
+window.__rptBusy=false;
+mergeInfo=autoMergeAndRoute(data);
+render();
+}
 }
 document.getElementById('rptRun').addEventListener('click',runRptParse);
 function locate(text){
@@ -1046,9 +1049,10 @@ function seqAll(ts){   // 串行+间隔，避开高德个人Key的QPS限制
   return p.then(function(){return out;});
 }
 document.getElementById('prun').onclick=function(){
-  savePlanParams();
-  var live=todaySel.filter(function(i){return customers[i];});
-  if(!live.length){ pset('<span class="mid">今天还没有有单地址。注意：左侧蓝色勾选框是批量操作用的，不算有单——要点地址旁的「有单」标签变绿才算。</span>'); return; }
+savePlanParams();
+if(window.__rptBusy){ pset('⏳ <b>识别还在进行中</b>（新客地址定位需要几秒）——识别完成后会<b>自动点亮并排线</b>，不用手动点亮，请稍等几秒；若超过 1 分钟没动静，刷新页面重新识别一次'); return; }
+var live=todaySel.filter(function(i){return customers[i];});
+if(!live.length){ pset('<span class="mid">今天还没有有单地址。正常流程：粘报单 → 「🔍 识别报单」→ 识别完成后会<b>自动点亮老客、新客入库上地图并直接排线</b>，全程不用手动点亮。也可以去客户页手动点亮「有单」。</span>'); return; }
   var sess=planParams.session||'lunch';
   var departMin = planParams.depart ? hm2min(planParams.depart) : (sess==='dinner'?hm2min('17:30'):hm2min('11:00'));
   var winEndMin = planParams.winEnd ? hm2min(planParams.winEnd) : (sess==='dinner'?hm2min('18:30'):hm2min('12:30'));

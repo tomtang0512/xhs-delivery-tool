@@ -82,7 +82,7 @@
 </head>
 <body>
 <div class="panel">
-  <h3>🥗 壮壮FIT 配送助手 <span id="verTag" style="font-size:11px;color:#999;font-weight:normal">v2.12</span></h3>
+  <h3>🥗 壮壮FIT 配送助手 <span id="verTag" style="font-size:11px;color:#999;font-weight:normal">v2.13</span></h3>
   <div class="tabs">
     <button class="tabbtn on" id="tab-plan" type="button">🛵 排线</button>
     <button class="tabbtn" id="tab-cust" type="button">👥 客户</button>
@@ -557,9 +557,9 @@ function autoMergeAndRoute(data){
     var idx=null;
     if(o.match){ idx=o.match.i; }
     else if(o.pos){
-      for(var i=0;i<customers.length;i++){
-        if(customers[i].lng&&hav(o.pos,[customers[i].lng,customers[i].lat])<0.08){ idx=i; merged++; break; }
-      }
+for(var i=0;i<customers.length;i++){
+if(customers[i].lng&&hav(o.pos,[customers[i].lng,customers[i].lat])<0.08){ idx=i; customers[i].meals=(customers[i].meals||1)+(o.meals||1); merged++; break; }
+}
       if(idx===null){
         var nm=(o.user&&o.user.trim())?o.user.trim():('新客'+(o.addr||'').slice(0,8));
         customers.push({name:nm,addr:o.addr||nm,lng:o.pos[0],lat:o.pos[1],meals:o.meals||1,t:groupToT(o.group),note:(o.note&&o.note!=='无')?o.note:''});

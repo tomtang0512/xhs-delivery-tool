@@ -82,7 +82,7 @@
 </head>
 <body>
 <div class="panel">
-  <h3>🥗 壮壮FIT 配送助手 <span id="verTag" style="font-size:11px;color:#999;font-weight:normal">v2.16</span></h3>
+  <h3>🥗 壮壮FIT 配送助手 <span id="verTag" style="font-size:11px;color:#999;font-weight:normal">v2.17</span></h3>
   <div class="tabs">
     <button class="tabbtn on" id="tab-plan" type="button">🛵 排线</button>
     <button class="tabbtn" id="tab-cust" type="button">👥 客户</button>
@@ -1201,12 +1201,25 @@ function riderPrice(pts,kmOut){
   var trips=[],i3=n;
   while(i3>0){var j3=dp.cut[i3];trips.push({seg:tour.slice(j3,i3)});i3=j3;}
   trips.reverse();
+  // 7.5) 趟出发时间自动推导：按趟内各点「X点前」窗口下界反推不空等的出发（乐刻 18:30 可送 → ~18:19 出发），不破坏任何时限才采用
+  function noWaitDep(tr,base){
+    var off=prep,cur=ORIGIN,nw=base;
+    tr.seg.forEach(function(gi){
+      var g=groups[gi];
+      if(g.ea>0){var need=g.ea-off;if(need>nw)nw=need;}
+      off+=ride(cur,g.pos)+g.min;cur=g.pos;
+    });
+    if(nw<=base+1e-9)return base;
+    return segInfo(tr.seg,nw).ok?nw:base;
+  }
   // 7) 精修：趟内 2-opt + 跨趟挪点（只接受整体不变差的改动）
   function chainEval(){
     var t=departMin,allok=true,tot=0;
     trips.forEach(function(tr){
-      var info=segInfo(tr.seg,planParams.round?t:departMin);
-      tr.info=info;tr.dep=planParams.round?t:departMin;
+      var base=planParams.round?t:departMin;
+      var dep=noWaitDep(tr,base);
+      var info=segInfo(tr.seg,dep);
+      tr.info=info;tr.dep=dep;
       tot+=info.dur;
       if(!info.ok||(info.dur>maxTrip&&tr.seg.length>1))allok=false;
       t=info.finish;

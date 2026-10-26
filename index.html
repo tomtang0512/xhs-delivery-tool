@@ -82,7 +82,7 @@
 </head>
 <body>
 <div class="panel">
-  <h3>🥗 壮壮FIT 配送助手 <span id="verTag" style="font-size:11px;color:#999;font-weight:normal">v2.20</span></h3>
+  <h3>🥗 壮壮FIT 配送助手 <span id="verTag" style="font-size:11px;color:#999;font-weight:normal">v2.21</span></h3>
   <div class="tabs">
     <button class="tabbtn on" id="tab-plan" type="button">🛵 排线</button>
     <button class="tabbtn" id="tab-cust" type="button">👥 客户</button>
@@ -556,6 +556,7 @@ function groupToT(g){
 }
 function autoMergeAndRoute(data){
   var lit=0,added=0,merged=0;
+  todaySel.length=0;   // 「以此为准」：重新识别=完全按本次报单重建点亮，之前点亮/已删除的单不再残留
   data.orders.forEach(function(o){
     var idx=null;
     if(o.match){ idx=o.match.i; }
@@ -621,7 +622,7 @@ var out=document.getElementById('rptout');
       var near=[]; rptCls.forEach(function(cl){ for(var i=0;i<cl.length;i++)for(var j=i+1;j<cl.length;j++){ var d=hav(cl[i].pos,cl[j].pos); if(d<=0.4) near.push('#'+cl[i].no+'+#'+cl[j].no+'（'+d.toFixed(2)+'km）'); } });
       h+=(near.length?'<div class="cl">⭕ 可合并叫单（同址/超近）：'+near.join('、')+'</div>':'');
     }
-    if(mergeInfo) h+='<div class="cl" style="margin-top:6px">✅ 已自动并入排线：点亮 '+mergeInfo.lit+' 家'+(mergeInfo.added?'，新客入库 '+mergeInfo.added+' 家（已上地图）':'')+(mergeInfo.merged?'，同址合并 '+mergeInfo.merged+' 家':'')+'，正在自动排线——结果见下方</div>';
+    if(mergeInfo) h+='<div class="cl" style="margin-top:6px">✅ 已按本次报单重置排线（之前的点亮已清空）：点亮 '+mergeInfo.lit+' 家'+(mergeInfo.added?'，新客入库 '+mergeInfo.added+' 家（已上地图）':'')+(mergeInfo.merged?'，同址合并 '+mergeInfo.merged+' 家':'')+'，正在自动排线——结果见下方</div>';
     out.innerHTML=h;
   }
   var rptCls=null,mergeInfo=null;

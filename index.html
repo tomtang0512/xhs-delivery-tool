@@ -82,7 +82,7 @@
 </head>
 <body>
 <div class="panel">
-  <h3>🥗 壮壮FIT 配送助手 <span id="verTag" style="font-size:11px;color:#999;font-weight:normal">v2.21</span></h3>
+  <h3>🥗 壮壮FIT 配送助手 <span id="verTag" style="font-size:11px;color:#999;font-weight:normal">v2.22</span></h3>
   <div class="tabs">
     <button class="tabbtn on" id="tab-plan" type="button">🛵 排线</button>
     <button class="tabbtn" id="tab-cust" type="button">👥 客户</button>
@@ -174,8 +174,8 @@
     </div>
     <div class="row trow">
       <select id="mealtime">
-        <option value="lunch">🥗 午餐 11:30~12:30（标准窗）</option>
-        <option value="dinner">🍗 晚餐 17:30~18:30（标准窗）</option>
+        <option value="lunch">🥗 午餐 11:00~12:30（两窗）</option>
+        <option value="dinner">🍗 晚餐 17:00~18:30（两窗）</option>
         <option value="both">🍱 午+晚 两餐都要（合送一次）</option>
         <option value="special">⏰ 特殊时间（如14:00，加收10元）</option>
       </select>
@@ -191,7 +191,7 @@
       🔴 12公里以上：客户自付全额跑腿费才接<br>
       🔵 现有客户参考点<br>
       <b>时间窗</b><br>
-      ⏰ 午 11:30~12:30 / 晚 17:30~18:30；两餐合送不加钱；窗外特殊时段加收10元<br>
+      ⏰ 午 11:00~12:30 / 晚 17:00~18:30（各两窗）；两餐合送不加钱；窗外特殊时段加收10元<br>
       <b>排线</b><br>
       🕐 按统一窗口截止（午12:30/晚18:30）＋车速＋上楼时间自动算；超「单班上限」自动拆多趟，多线可派不同骑手同时跑<br>
       ⏱ 「弹性±」（默认30分）：窗口截止往后放宽的分钟数，对应与客户约定的迟到容忍度；设 0 则严格卡窗口截止<br>
@@ -313,7 +313,7 @@ if(localStorage.getItem('customers') && getVer()<CUST_VER && sessionStorage.getI
 function showUpgradeBanner(){
   var bar=document.createElement('div');
   bar.style.cssText='position:fixed;top:0;left:0;right:0;z-index:99999;background:#e67e22;color:#fff;padding:8px 12px;font-size:13px;display:flex;gap:8px;align-items:center;box-shadow:0 2px 6px rgba(0,0,0,.25)';
-  bar.innerHTML='<span style="flex:1">🔄 点位库已更新（v'+CUST_VER+'：取消逐户「送达时限」，统一按 午11:30~12:30 / 晚17:30~18:30 标准窗口排线），点「一键同步」换成最新列表（今日有单标记保留）</span>';
+  bar.innerHTML='<span style="flex:1">🔄 点位库已更新（v'+CUST_VER+'：取消逐户「送达时限」，统一按 午11:00~12:30 / 晚17:00~18:30 两窗排线），点「一键同步」换成最新列表（今日有单标记保留）</span>';
   var b1=document.createElement('button'); b1.textContent='一键同步';
   b1.style.cssText='flex-shrink:0;background:#fff;color:#e67e22;border:none;border-radius:6px;padding:4px 10px;font-weight:bold;cursor:pointer';
   var b2=document.createElement('button'); b2.textContent='暂不';
@@ -391,10 +391,10 @@ function distToSeg(p,a,b){
 function timeNote(){
   var sel=document.getElementById('mealtime');
   var v=sel?sel.value:'lunch';
-  if(v==='lunch') return '<br>⏰ 午餐标准窗（11:30~12:30），不加钱';
-  if(v==='dinner') return '<br>⏰ 晚餐标准窗（17:30~18:30），不加钱';
+  if(v==='lunch') return '<br>⏰ 午餐窗（11:00~12:30），不加钱';
+  if(v==='dinner') return '<br>⏰ 晚餐窗（17:00~18:30），不加钱';
   if(v==='both') return '<br>🍱 两餐合送：中午一趟送两份，放前台/冰箱客户晚上自取——只算一趟配送，不加钱';
-  return '<br>⏰ 特殊时段（标准窗外，午11:30~12:30 / 晚17:30~18:30）：首选劝客户改标准窗+放前台冰箱（不加钱）；坚持现送则加收 '+SPECIAL_TIME_FEE+' 元/单，且该时段当天可能只有这一单＝单独跑一趟';
+  return '<br>⏰ 特殊时段（两窗外，午11:00~12:30 / 晚17:00~18:30）：首选劝客户改两窗之一+放前台冰箱（不加钱）；坚持现送则加收 '+SPECIAL_TIME_FEE+' 元/单，且该时段当天可能只有这一单＝单独跑一趟';
 }
 function timeLabel(){
   var sel=document.getElementById('mealtime');
@@ -507,9 +507,11 @@ function parseRptText(raw){
       var nC=0; o.dishes.forEach(function(d){ var c=d.match(/[①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮]/g); if(c&&c.length>nC)nC=c.length; });
       o.meals=nC>0?nC:1;
     }
-    var tm=null,tre=/(\d{1,2})\s*[:：]\s*(\d{2})/g,tm2;   // 时间段头里的截止时刻：取最后一个（如 11:00-11:30 → 11:30）
-    while((tm2=tre.exec(o.group||'')))tm=tm2;
-    if(tm)o.dlMin=(+tm[1])*60+(+tm[2]);
+    var tms=[],tre=/((\d{1,2})\s*[:：]\s*(\d{2}))/g,tm2;   // 窗口区间头：取第一个=窗口起点、最后一个=窗尾（如 11:00~11:45）；单个时刻=「X点前」旧格式
+    while((tm2=tre.exec(o.group||'')))tms.push((+tm2[2])*60+(+tm2[3]));
+    if(tms.length>=2){o.winS=tms[0];o.winE=tms[tms.length-1];}
+    else if(tms.length===1){o.winE=tms[0];o.winS=Math.max(0,tms[0]-45);}   // 旧「X点前」按新窗口宽 45 分折算 [X-45, X]
+    if(tms.length)o.dlMin=o.winE;
     var all=o.dishes.join('');
     o.types={pro:(all.match(/PRO碗/g)||[]).length,easy:(all.match(/EASY碗/g)||[]).length,pot:(all.match(/鲜蔬锅/g)||[]).length};
   });
@@ -574,7 +576,10 @@ if(customers[i].lng&&hav(o.pos,[customers[i].lng,customers[i].lat])<0.08){ idx=i
     if(idx!==null){
       var tn=window.__rptNames[idx]||(window.__rptNames[idx]=[]);   // 今日报单用户名覆盖层：匹配到档案旧点位时，标签显示今天的用户
       if(o.user&&tn.indexOf(o.user)<0)tn.push(o.user);
-      if(o.dlMin){ var c0=customers[idx],tk=new Date().toDateString(); c0.dlM=(c0.dlM&&c0.dlD===tk)?Math.min(c0.dlM,o.dlMin):o.dlMin; c0.dlD=tk; }
+      if(o.winE){ var c0=customers[idx],tk=new Date().toDateString();   // 窗口起点/窗尾都按今日报单叠加：dlm取最早窗尾（硬时限），ea取最晚窗口起点
+        c0.dlM=(c0.dlM&&c0.dlD===tk)?Math.min(c0.dlM,o.winE):o.winE;
+        c0.wsM=(c0.wsM&&c0.dlD===tk)?Math.max(c0.wsM,o.winS||0):o.winS;
+        c0.dlD=tk; }
       if(todaySel.indexOf(idx)<0){ todaySel.push(idx); lit++; }
     }
   });
@@ -1017,7 +1022,7 @@ document.getElementById('goCust').addEventListener('click',function(){showTab('c
 document.getElementById('psession').addEventListener('change',function(){
   var v=this.value;
   document.getElementById('pwinend').value = v==='dinner' ? '18:30' : '12:30';
-  document.getElementById('pdepart').value = v==='dinner' ? '16:30' : '11:00';   // 切时段同步切出发，避免晚餐用上午出发排线
+  document.getElementById('pdepart').value = v==='dinner' ? '17:00' : '11:00';   // 切时段同步切出发：晚=最晚窗尾18:30−90分保温，午=12:30−90
 });
 function savePlanParams(){
   planParams={session:document.getElementById('psession').value,
@@ -1089,15 +1094,15 @@ function riderPrice(pts,kmOut){
     var k=customers[i];
     if(!sessOK(k)){excluded.push(k);return;}
     var dlm=winEndMin+flex,ea=0;
-    if(k.dlM&&k.dlD===todayK){dlm=Math.min(dlm,k.dlM);ea=Math.max(0,k.dlM-50);}   // 报单「X点前」= 硬时限（不叠加弹性），送达窗口 [X-50分, X]
+    if(k.dlM&&k.dlD===todayK){dlm=Math.min(dlm,k.dlM);ea=(k.wsM!=null&&k.dlD===todayK)?Math.max(0,k.wsM):Math.max(0,k.dlM-45);}   // v2.22 报单窗口区间 [起点,窗尾]：起点=最早可送达，窗尾=硬时限；旧「X点前」折算 [X-45,X]
     mainPts.push({k:k,dlm:dlm,m:oMeals[i]||k.meals||1,ea:ea});
   });
   // 出发时间防呆：与时段/报单截止明显矛盾时自动修正（可手动改回）
-  var minDlRaw=1e9,depOrig=min2hm(departMin),depSnap='';
-  mainPts.forEach(function(mp){if(mp.k.dlM&&mp.k.dlD===todayK&&mp.k.dlM<minDlRaw)minDlRaw=mp.k.dlM;});
-  if(sess==='dinner'&&departMin<hm2min('15:00')){departMin=hm2min('16:30');depSnap='16:30';}
+  var minDlRaw=1e9,maxDlRaw=0,depOrig=min2hm(departMin),depSnap='';
+  mainPts.forEach(function(mp){if(mp.k.dlM&&mp.k.dlD===todayK){if(mp.k.dlM<minDlRaw)minDlRaw=mp.k.dlM;if(mp.k.dlM>maxDlRaw)maxDlRaw=mp.k.dlM;}});
+  if(sess==='dinner'&&departMin<hm2min('16:00')){departMin=hm2min('17:00');depSnap='17:00';}
   if(sess==='lunch'&&departMin>hm2min('13:00')){departMin=hm2min('11:00');depSnap='11:00';}
-  if(minDlRaw<1e9&&departMin<minDlRaw-120){departMin=minDlRaw-30;depSnap=min2hm(departMin);}
+  if(maxDlRaw&&departMin<maxDlRaw-90){departMin=maxDlRaw-90;depSnap=min2hm(departMin);}   // v2.22 保温纪律：打包/出发不早于「最晚窗尾−90分」（90分保温预算）
   if(depSnap){document.getElementById('pdepart').value=depSnap;planParams.depart=depSnap;}
   var depSnapNote=depSnap?('⏱ 出发时间从 <b>'+depOrig+'</b> 自动修正为 <b>'+depSnap+'</b>（与报单送达截止/时段矛盾，可在左上改回）'):'';
   if(!mainPts.length){
@@ -1136,7 +1141,7 @@ function riderPrice(pts,kmOut){
     for(var q=0;q<ord.length;q++){
       var g=groups[ord[q]],tt=ride(cur,g.pos);
       t+=tt;clock+=tt;
-      if(clock<g.ea){t+=g.ea-clock;clock=g.ea;}   // 早于「X点前」下界（X-50分）：等待计入成本，优化器自动把该点排后
+      if(clock<g.ea){t+=g.ea-clock;clock=g.ea;}   // 早于窗口起点：等待计入成本，优化器自动把该点排后（早窗点自然排线头）
       var late=clock-g.dlm;if(late>0)viol+=late;
       clock+=g.min;cur=g.pos;
     }
@@ -1205,7 +1210,7 @@ function riderPrice(pts,kmOut){
   var trips=[],i3=n;
   while(i3>0){var j3=dp.cut[i3];trips.push({seg:tour.slice(j3,i3)});i3=j3;}
   trips.reverse();
-  // 7.5) 趟出发时间自动推导：按趟内各点「X点前」窗口下界反推不空等的出发（乐刻 18:30 可送 → ~18:19 出发），不破坏任何时限才采用
+  // 7.5) 趟出发时间自动推导：按趟内各点窗口起点反推不空等的出发，再与「保温下限」取更晚；不破坏任何时限才采用
   function noWaitDep(tr,base){
     var off=prep,cur=ORIGIN,nw=base;
     tr.seg.forEach(function(gi){
@@ -1359,7 +1364,7 @@ function riderPrice(pts,kmOut){
       blocks.push('<div style="margin:8px 0;padding:8px 10px;border:1px solid '+col+';border-left:5px solid '+col+';border-radius:8px;background:#fff">'
         +'<b style="color:'+col+'">🛵 第'+(ti+1)+'趟</b>（'+tr.seg.length+'点'+meals+'餐）：出餐点 → '+names.join(' → ')
         +'<br>⏱ 出发 <b>'+min2hm(tr.dep)+'</b>｜最晚 '+min2hm(tr.latest)+' 出发｜ETA：'+etas.map(function(e2){return glabel(groups[e2.gi])+' '+min2hm(e2.t);}).join('、')
-        +(waited>0.5?'<br>⏸ 本趟含等送达窗口约 '+Math.round(waited)+' 分（「X点前」单不能早于 X-50分 送达）：可把出发调晚减少空等':'')
+        +(waited>0.5?'<br>⏸ 本趟含等送达窗口约 '+Math.round(waited)+' 分（不能早于窗口起点送达）：可把出发调晚减少空等':'')
         +'<br>📏 计价全线 <b>'+kmOut.toFixed(1)+'km</b>（店→末点，回程不计价）｜用时约 <b>'+dur+'分</b>（上楼'+stopMin+'分）'+(back?'｜回店 '+min2hm(clock):'｜送完 '+min2hm(clock))
         +'<br>💰 骑手班价：整趟一口价 <b>'+rp.p+'元</b>（'+tr.seg.length+'点×'+(kmOut<=3?'≤3':kmOut<=8?'4~8':kmOut<=13?'9~13':kmOut<=18?'14~18':'19~22')+'km 档'+(rp.cap?'，超表按顶档':'')+'）｜餐均 '+(rp.p/Math.max(1,meals)).toFixed(1)+'元｜闪送逐点合计 '+tripFlash+'元 → '+adv
         +'<br>📋 发骑手文案：'+tr.seg.length+' 个点、全线 '+kmOut.toFixed(1)+' 公里、约 '+dur+' 分钟、整趟 '+rp.p+' 元'

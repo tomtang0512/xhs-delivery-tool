@@ -1085,7 +1085,7 @@ function riderPrice(pts,kmOut){
     var k=customers[i];
     if(!sessOK(k)){excluded.push(k);return;}
     var dlm=winEndMin+flex,ea=0;
-    if(k.dlM&&k.dlD===todayK){dlm=Math.min(dlm,k.dlM+flex);ea=Math.max(0,k.dlM-30);}   // 「X点前」=[X-30分,X]：早超过30分也不送
+    if(k.dlM&&k.dlD===todayK){dlm=Math.min(dlm,k.dlM);ea=Math.max(0,k.dlM-30);}   // 报单「X点前」= 硬时限（不叠加弹性），送达窗口 [X-30分, X]
     mainPts.push({k:k,dlm:dlm,m:oMeals[i]||k.meals||1,ea:ea});
   });
   // 出发时间防呆：与时段/报单截止明显矛盾时自动修正（可手动改回）

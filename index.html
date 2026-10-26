@@ -82,7 +82,7 @@
 </head>
 <body>
 <div class="panel">
-  <h3>🥗 壮壮FIT 配送助手 <span id="verTag" style="font-size:11px;color:#999;font-weight:normal">v2.19</span></h3>
+  <h3>🥗 壮壮FIT 配送助手 <span id="verTag" style="font-size:11px;color:#999;font-weight:normal">v2.20</span></h3>
   <div class="tabs">
     <button class="tabbtn on" id="tab-plan" type="button">🛵 排线</button>
     <button class="tabbtn" id="tab-cust" type="button">👥 客户</button>
@@ -1088,7 +1088,7 @@ function riderPrice(pts,kmOut){
     var k=customers[i];
     if(!sessOK(k)){excluded.push(k);return;}
     var dlm=winEndMin+flex,ea=0;
-    if(k.dlM&&k.dlD===todayK){dlm=Math.min(dlm,k.dlM);ea=Math.max(0,k.dlM-30);}   // 报单「X点前」= 硬时限（不叠加弹性），送达窗口 [X-30分, X]
+    if(k.dlM&&k.dlD===todayK){dlm=Math.min(dlm,k.dlM);ea=Math.max(0,k.dlM-50);}   // 报单「X点前」= 硬时限（不叠加弹性），送达窗口 [X-50分, X]
     mainPts.push({k:k,dlm:dlm,m:oMeals[i]||k.meals||1,ea:ea});
   });
   // 出发时间防呆：与时段/报单截止明显矛盾时自动修正（可手动改回）
@@ -1135,7 +1135,7 @@ function riderPrice(pts,kmOut){
     for(var q=0;q<ord.length;q++){
       var g=groups[ord[q]],tt=ride(cur,g.pos);
       t+=tt;clock+=tt;
-      if(clock<g.ea){t+=g.ea-clock;clock=g.ea;}   // 早于「X点前」下界（X-30分）：等待计入成本，优化器自动把该点排后
+      if(clock<g.ea){t+=g.ea-clock;clock=g.ea;}   // 早于「X点前」下界（X-50分）：等待计入成本，优化器自动把该点排后
       var late=clock-g.dlm;if(late>0)viol+=late;
       clock+=g.min;cur=g.pos;
     }
@@ -1358,7 +1358,7 @@ function riderPrice(pts,kmOut){
       blocks.push('<div style="margin:8px 0;padding:8px 10px;border:1px solid '+col+';border-left:5px solid '+col+';border-radius:8px;background:#fff">'
         +'<b style="color:'+col+'">🛵 第'+(ti+1)+'趟</b>（'+tr.seg.length+'点'+meals+'餐）：出餐点 → '+names.join(' → ')
         +'<br>⏱ 出发 <b>'+min2hm(tr.dep)+'</b>｜最晚 '+min2hm(tr.latest)+' 出发｜ETA：'+etas.map(function(e2){return glabel(groups[e2.gi])+' '+min2hm(e2.t);}).join('、')
-        +(waited>0.5?'<br>⏸ 本趟含等送达窗口约 '+Math.round(waited)+' 分（「X点前」单不能早于 X-30分 送达）：可把出发调晚减少空等':'')
+        +(waited>0.5?'<br>⏸ 本趟含等送达窗口约 '+Math.round(waited)+' 分（「X点前」单不能早于 X-50分 送达）：可把出发调晚减少空等':'')
         +'<br>📏 计价全线 <b>'+kmOut.toFixed(1)+'km</b>（店→末点，回程不计价）｜用时约 <b>'+dur+'分</b>（上楼'+stopMin+'分）'+(back?'｜回店 '+min2hm(clock):'｜送完 '+min2hm(clock))
         +'<br>💰 骑手班价：整趟一口价 <b>'+rp.p+'元</b>（'+tr.seg.length+'点×'+(kmOut<=3?'≤3':kmOut<=8?'4~8':kmOut<=13?'9~13':kmOut<=18?'14~18':'19~22')+'km 档'+(rp.cap?'，超表按顶档':'')+'）｜餐均 '+(rp.p/Math.max(1,meals)).toFixed(1)+'元｜闪送逐点合计 '+tripFlash+'元 → '+adv
         +'<br>📋 发骑手文案：'+tr.seg.length+' 个点、全线 '+kmOut.toFixed(1)+' 公里、约 '+dur+' 分钟、整趟 '+rp.p+' 元'

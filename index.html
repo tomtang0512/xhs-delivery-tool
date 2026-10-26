@@ -82,7 +82,7 @@
 </head>
 <body>
 <div class="panel">
-  <h3>🥗 壮壮FIT 配送助手 <span id="verTag" style="font-size:11px;color:#999;font-weight:normal">v2.15</span></h3>
+  <h3>🥗 壮壮FIT 配送助手 <span id="verTag" style="font-size:11px;color:#999;font-weight:normal">v2.16</span></h3>
   <div class="tabs">
     <button class="tabbtn on" id="tab-plan" type="button">🛵 排线</button>
     <button class="tabbtn" id="tab-cust" type="button">👥 客户</button>
@@ -1084,9 +1084,9 @@ function riderPrice(pts,kmOut){
   live.forEach(function(i){
     var k=customers[i];
     if(!sessOK(k)){excluded.push(k);return;}
-    var dlm=winEndMin+flex;
-    if(k.dlM&&k.dlD===todayK)dlm=Math.min(dlm,k.dlM+flex);   // 报单时间段头里的截止时刻优先（同样享受弹性）
-    mainPts.push({k:k,dlm:dlm,m:oMeals[i]||k.meals||1});
+    var dlm=winEndMin+flex,ea=0;
+    if(k.dlM&&k.dlD===todayK){dlm=Math.min(dlm,k.dlM+flex);ea=Math.max(0,k.dlM-30);}   // 「X点前」=[X-30分,X]：早超过30分也不送
+    mainPts.push({k:k,dlm:dlm,m:oMeals[i]||k.meals||1,ea:ea});
   });
   // 出发时间防呆：与时段/报单截止明显矛盾时自动修正（可手动改回）
   var minDlRaw=1e9,depOrig=min2hm(departMin),depSnap='';
@@ -1107,9 +1107,10 @@ function riderPrice(pts,kmOut){
     var p=[mp.k.lng,mp.k.lat];
     var g=null;
     for(var gi=0;gi<groups.length;gi++){if(km(p,groups[gi].pos)<=MERGE_KM){g=groups[gi];break;}}
-    if(g){g.members.push(mp.k);g.min=Math.max(g.min,CX_MIN[mp.k.cx||'normal']);g.dlm=Math.min(g.dlm,mp.dlm);g.meals+=mp.m;}
-    else groups.push({pos:p,members:[mp.k],min:CX_MIN[mp.k.cx||'normal'],dlm:mp.dlm,meals:mp.m});
+    if(g){g.members.push(mp.k);g.min=Math.max(g.min,CX_MIN[mp.k.cx||'normal']);g.dlm=Math.min(g.dlm,mp.dlm);g.meals+=mp.m;g.ea=Math.max(g.ea||0,mp.ea);}
+    else groups.push({pos:p,members:[mp.k],min:CX_MIN[mp.k.cx||'normal'],dlm:mp.dlm,meals:mp.m,ea:mp.ea});
   });
+  groups.forEach(function(g){if(g.ea>g.dlm)g.ea=0;});   // 同址不同截止冲突时放弃最早约束，保证可解
   var glabel=function(g){return g.members.map(function(m){return m.name;}).join('+');};
   // 3) 时限过紧的点（出发+准备+直线骑行已超时限）剔除，单独提示最晚出发时间
   var tight=[];
@@ -1131,6 +1132,7 @@ function riderPrice(pts,kmOut){
     for(var q=0;q<ord.length;q++){
       var g=groups[ord[q]],tt=ride(cur,g.pos);
       t+=tt;clock+=tt;
+      if(clock<g.ea){t+=g.ea-clock;clock=g.ea;}   // 早于「X点前」下界（X-30分）：等待计入成本，优化器自动把该点排后
       var late=clock-g.dlm;if(late>0)viol+=late;
       clock+=g.min;cur=g.pos;
     }
@@ -1163,6 +1165,7 @@ function riderPrice(pts,kmOut){
     for(var q=0;q<ord.length;q++){
       var g=groups[ord[q]],tt=ride(cur,g.pos);
       dur+=tt;kmAcc+=tt*speed/60;clock+=tt;cur=g.pos;
+      if(clock<g.ea)clock=g.ea;   // 等到最早可送达（等窗不计入单班时长，但顺延完成时刻）
       arr.push(clock);
       if(clock>g.dlm+1e-9)ok=false;
       dur+=g.min;clock+=g.min;
@@ -1300,13 +1303,14 @@ function riderPrice(pts,kmOut){
       if(planParams.round&&ti>0)tr.dep=prevFinish;
       var seq=[ORIGIN].concat(tr.seg.map(function(gi){return groups[gi].pos;}));
       var back=planParams.round&&tr.seg.length;
-      var kmAcc=0,etas=[],clock=tr.dep+prep,stopMin=0,late=false,slack=1e9;
+      var kmAcc=0,etas=[],clock=tr.dep+prep,stopMin=0,late=false,slack=1e9,waited=0;
       for(var q=0;q<tr.seg.length;q++){
         var r=legRes[li++];
         var dk=r?r.km:km(seq[q],seq[q+1])*ROAD_K;
         if(!r)apiFail=true;
         var mins=dk/speed*60;
         kmAcc+=dk;clock+=mins;
+        if(clock<groups[tr.seg[q]].ea){waited+=groups[tr.seg[q]].ea-clock;clock=groups[tr.seg[q]].ea;}   // 实测后同样等窗到「X点前」下界
         etas.push({gi:tr.seg[q],t:clock});
         slack=Math.min(slack,groups[tr.seg[q]].dlm-clock);
         if(clock>groups[tr.seg[q]].dlm+0.5)late=true;
@@ -1338,6 +1342,7 @@ function riderPrice(pts,kmOut){
       blocks.push('<div style="margin:8px 0;padding:8px 10px;border:1px solid '+col+';border-left:5px solid '+col+';border-radius:8px;background:#fff">'
         +'<b style="color:'+col+'">🛵 第'+(ti+1)+'趟</b>（'+tr.seg.length+'点'+meals+'餐）：出餐点 → '+names.join(' → ')
         +'<br>⏱ 出发 <b>'+min2hm(tr.dep)+'</b>｜最晚 '+min2hm(tr.latest)+' 出发｜ETA：'+etas.map(function(e2){return glabel(groups[e2.gi])+' '+min2hm(e2.t);}).join('、')
+        +(waited>0.5?'<br>⏸ 本趟含等送达窗口约 '+Math.round(waited)+' 分（「X点前」单不能早于 X-30分 送达）：可把出发调晚减少空等':'')
         +'<br>📏 计价全线 <b>'+kmOut.toFixed(1)+'km</b>（店→末点，回程不计价）｜用时约 <b>'+dur+'分</b>（上楼'+stopMin+'分）'+(back?'｜回店 '+min2hm(clock):'｜送完 '+min2hm(clock))
         +'<br>💰 骑手班价：整趟一口价 <b>'+rp.p+'元</b>（'+tr.seg.length+'点×'+(kmOut<=3?'≤3':kmOut<=8?'4~8':kmOut<=13?'9~13':kmOut<=18?'14~18':'19~22')+'km 档'+(rp.cap?'，超表按顶档':'')+'）｜餐均 '+(rp.p/Math.max(1,meals)).toFixed(1)+'元｜闪送逐点合计 '+tripFlash+'元 → '+adv
         +'<br>📋 发骑手文案：'+tr.seg.length+' 个点、全线 '+kmOut.toFixed(1)+' 公里、约 '+dur+' 分钟、整趟 '+rp.p+' 元'

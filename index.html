@@ -82,7 +82,7 @@
 </head>
 <body>
 <div class="panel">
-  <h3>🥗 壮壮FIT 配送助手 <span id="verTag" style="font-size:11px;color:#999;font-weight:normal">v2.18</span></h3>
+  <h3>🥗 壮壮FIT 配送助手 <span id="verTag" style="font-size:11px;color:#999;font-weight:normal">v2.19</span></h3>
   <div class="tabs">
     <button class="tabbtn on" id="tab-plan" type="button">🛵 排线</button>
     <button class="tabbtn" id="tab-cust" type="button">👥 客户</button>
@@ -571,6 +571,8 @@ if(customers[i].lng&&hav(o.pos,[customers[i].lng,customers[i].lat])<0.08){ idx=i
       o.match={i:idx,s:99,c:customers[idx],amb:false,auto:true};
     }
     if(idx!==null){
+      var tn=window.__rptNames[idx]||(window.__rptNames[idx]=[]);   // 今日报单用户名覆盖层：匹配到档案旧点位时，标签显示今天的用户
+      if(o.user&&tn.indexOf(o.user)<0)tn.push(o.user);
       if(o.dlMin){ var c0=customers[idx],tk=new Date().toDateString(); c0.dlM=(c0.dlM&&c0.dlD===tk)?Math.min(c0.dlM,o.dlMin):o.dlMin; c0.dlD=tk; }
       if(todaySel.indexOf(idx)<0){ todaySel.push(idx); lit++; }
     }
@@ -587,6 +589,7 @@ var out=document.getElementById('rptout');
   if(!raw.trim()){ out.innerHTML='<span class="bad">先把报单文本粘进上面的框</span>'; window.__rptBusy=false; return; }
   var data=parseRptText(raw);
   window.__rptOrders=data.orders;   // 供排线统计「今日餐数」（覆盖档案 meals）
+  window.__rptNames={};             // 今日报单用户名（按客户索引），重建保证重复识别幂等
   if(!data.orders.length){ out.innerHTML='<span class="bad">没解析出报单：确认每单以 #编号 开头，且有 用户：/地址： 行</span>'; window.__rptBusy=false; return; }
   data.orders.forEach(function(o){
     o.match=o.addr?matchCustIdx(o.user,o.addr):null;
@@ -1111,7 +1114,7 @@ function riderPrice(pts,kmOut){
     else groups.push({pos:p,members:[mp.k],min:CX_MIN[mp.k.cx||'normal'],dlm:mp.dlm,meals:mp.m,ea:mp.ea});
   });
   groups.forEach(function(g){if(g.ea>g.dlm)g.ea=0;});   // 同址不同截止冲突时放弃最早约束，保证可解
-  var glabel=function(g){return g.members.map(function(m){return m.name;}).join('+');};
+  var glabel=function(g){return g.members.map(function(m){var rn=(window.__rptNames||{})[customers.indexOf(m)];return (rn&&rn.length)?rn.join('+'):m.name;}).join('+');};
   // 3) 时限过紧的点（出发+准备+直线骑行已超时限）剔除，单独提示最晚出发时间
   var tight=[];
   for(var r1=groups.length-1;r1>=0;r1--){

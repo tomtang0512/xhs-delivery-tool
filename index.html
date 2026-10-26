@@ -82,7 +82,7 @@
 </head>
 <body>
 <div class="panel">
-  <h3>🥗 壮壮FIT 配送助手 <span id="verTag" style="font-size:11px;color:#999;font-weight:normal">v2.14</span></h3>
+  <h3>🥗 壮壮FIT 配送助手 <span id="verTag" style="font-size:11px;color:#999;font-weight:normal">v2.15</span></h3>
   <div class="tabs">
     <button class="tabbtn on" id="tab-plan" type="button">🛵 排线</button>
     <button class="tabbtn" id="tab-cust" type="button">👥 客户</button>
@@ -561,7 +561,7 @@ function autoMergeAndRoute(data){
     if(o.match){ idx=o.match.i; }
     else if(o.pos){
 for(var i=0;i<customers.length;i++){
-if(customers[i].lng&&hav(o.pos,[customers[i].lng,customers[i].lat])<0.08){ idx=i; customers[i].meals=(customers[i].meals||1)+(o.meals||1); merged++; break; }
+if(customers[i].lng&&hav(o.pos,[customers[i].lng,customers[i].lat])<0.08){ idx=i; merged++; break; }   // 今日餐数改由报单叠加层统计（oMeals），不再累进档案 meals（避免重复识别越滚越大）
 }
       if(idx===null){
         var nm=(o.user&&o.user.trim())?o.user.trim():('新客'+(o.addr||'').slice(0,8));
@@ -586,6 +586,7 @@ var out=document.getElementById('rptout');
   var raw=document.getElementById('rptTxt').value;
   if(!raw.trim()){ out.innerHTML='<span class="bad">先把报单文本粘进上面的框</span>'; window.__rptBusy=false; return; }
   var data=parseRptText(raw);
+  window.__rptOrders=data.orders;   // 供排线统计「今日餐数」（覆盖档案 meals）
   if(!data.orders.length){ out.innerHTML='<span class="bad">没解析出报单：确认每单以 #编号 开头，且有 用户：/地址： 行</span>'; window.__rptBusy=false; return; }
   data.orders.forEach(function(o){
     o.match=o.addr?matchCustIdx(o.user,o.addr):null;
@@ -1078,13 +1079,23 @@ function riderPrice(pts,kmOut){
   var sessOK=function(k){var t=k.t||'';return sess==='all'||t===''||t==='b'||t===(sess==='lunch'?'l':'d');};
   var mainPts=[],excluded=[];
   var todayK=new Date().toDateString();
+  var oMeals={};
+  (window.__rptOrders||[]).forEach(function(o){ if(o.match&&o.match.i!=null)oMeals[o.match.i]=(oMeals[o.match.i]||0)+(o.meals||1); });
   live.forEach(function(i){
     var k=customers[i];
     if(!sessOK(k)){excluded.push(k);return;}
     var dlm=winEndMin+flex;
     if(k.dlM&&k.dlD===todayK)dlm=Math.min(dlm,k.dlM+flex);   // 报单时间段头里的截止时刻优先（同样享受弹性）
-    mainPts.push({k:k,dlm:dlm});
+    mainPts.push({k:k,dlm:dlm,m:oMeals[i]||k.meals||1});
   });
+  // 出发时间防呆：与时段/报单截止明显矛盾时自动修正（可手动改回）
+  var minDlRaw=1e9,depOrig=min2hm(departMin),depSnap='';
+  mainPts.forEach(function(mp){if(mp.k.dlM&&mp.k.dlD===todayK&&mp.k.dlM<minDlRaw)minDlRaw=mp.k.dlM;});
+  if(sess==='dinner'&&departMin<hm2min('15:00')){departMin=hm2min('16:30');depSnap='16:30';}
+  if(sess==='lunch'&&departMin>hm2min('13:00')){departMin=hm2min('11:00');depSnap='11:00';}
+  if(minDlRaw<1e9&&departMin<minDlRaw-120){departMin=minDlRaw-30;depSnap=min2hm(departMin);}
+  if(depSnap){document.getElementById('pdepart').value=depSnap;planParams.depart=depSnap;}
+  var depSnapNote=depSnap?('⏱ 出发时间从 <b>'+depOrig+'</b> 自动修正为 <b>'+depSnap+'</b>（与报单送达截止/时段矛盾，可在左上改回）'):'';
   if(!mainPts.length){
     var m0='本时段没有可排线的点。';
     if(excluded.length) m0+='<br>· 时段不符（习惯时段）：'+excluded.map(function(k){return k.name+'（'+(TIME_MAP[k.t||'']||'不固定')+'）';}).join('、');
@@ -1096,8 +1107,8 @@ function riderPrice(pts,kmOut){
     var p=[mp.k.lng,mp.k.lat];
     var g=null;
     for(var gi=0;gi<groups.length;gi++){if(km(p,groups[gi].pos)<=MERGE_KM){g=groups[gi];break;}}
-    if(g){g.members.push(mp.k);g.min=Math.max(g.min,CX_MIN[mp.k.cx||'normal']);g.dlm=Math.min(g.dlm,mp.dlm);g.meals+=(mp.k.meals||1);}
-    else groups.push({pos:p,members:[mp.k],min:CX_MIN[mp.k.cx||'normal'],dlm:mp.dlm,meals:(mp.k.meals||1)});
+    if(g){g.members.push(mp.k);g.min=Math.max(g.min,CX_MIN[mp.k.cx||'normal']);g.dlm=Math.min(g.dlm,mp.dlm);g.meals+=mp.m;}
+    else groups.push({pos:p,members:[mp.k],min:CX_MIN[mp.k.cx||'normal'],dlm:mp.dlm,meals:mp.m});
   });
   var glabel=function(g){return g.members.map(function(m){return m.name;}).join('+');};
   // 3) 时限过紧的点（出发+准备+直线骑行已超时限）剔除，单独提示最晚出发时间
@@ -1107,7 +1118,7 @@ function riderPrice(pts,kmOut){
     if(departMin+need>g1.dlm){tight.push({g:g1,latest:g1.dlm-need});groups.splice(r1,1);}
   }
   var n=groups.length;
-  var warn='';
+  var warn=depSnapNote;
   tight.forEach(function(w){warn+='<br>⚠️ <b>'+glabel(w.g)+'</b> 时限 '+min2hm(w.g.dlm)+' 来不及：需最晚 '+min2hm(w.latest)+' 出发——建议单独提前送/自送/与客户改约';});
   excluded.forEach(function(k){warn+='<br>· '+k.name+'：习惯时段为「'+(TIME_MAP[k.t||'']||'不固定')+'」，未纳入本次排线';});
   if(!n){

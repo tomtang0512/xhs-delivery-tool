@@ -82,7 +82,7 @@
 </head>
 <body>
 <div class="panel">
-  <h3>🥗 壮壮FIT 配送助手 <span id="verTag" style="font-size:11px;color:#999;font-weight:normal">v2.13</span></h3>
+  <h3>🥗 壮壮FIT 配送助手 <span id="verTag" style="font-size:11px;color:#999;font-weight:normal">v2.14</span></h3>
   <div class="tabs">
     <button class="tabbtn on" id="tab-plan" type="button">🛵 排线</button>
     <button class="tabbtn" id="tab-cust" type="button">👥 客户</button>
@@ -483,7 +483,7 @@ function parseRptText(raw){
   for(var li=0;li<lines.length;li++){
     var L=lines[li].trim(); if(!L) continue;
     var m;
-    if((m=L.match(/^[-—=]{3,}\s*(.+?)\s*[-—=]{3,}$/))){ push(); group=m[1]; continue; }
+    if((m=L.match(/[-—=]{3,}\s*(.+?)\s*[-—=]{3,}/))){ push(); group=m[1]; continue; }   // 不锚定行首：兼容「以此为准-----17:00之前-----」
     if(/^(上午|中午|下午|晚上)/.test(L)&&L.indexOf('：')>-1&&L.indexOf('#')<0){ push(); group=L; continue; }
     if((m=L.match(/^#(\d+)\s*（([^）]*)）?/))){ push(); cur={no:+m[1],tag:m[2]||'',dishes:[],group:group}; continue; }
     if((m=L.match(/^#(\d+)/))){ push(); cur={no:+m[1],tag:'',dishes:[],group:group}; continue; }
@@ -507,6 +507,9 @@ function parseRptText(raw){
       var nC=0; o.dishes.forEach(function(d){ var c=d.match(/[①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮]/g); if(c&&c.length>nC)nC=c.length; });
       o.meals=nC>0?nC:1;
     }
+    var tm=null,tre=/(\d{1,2})\s*[:：]\s*(\d{2})/g,tm2;   // 时间段头里的截止时刻：取最后一个（如 11:00-11:30 → 11:30）
+    while((tm2=tre.exec(o.group||'')))tm=tm2;
+    if(tm)o.dlMin=(+tm[1])*60+(+tm[2]);
     var all=o.dishes.join('');
     o.types={pro:(all.match(/PRO碗/g)||[]).length,easy:(all.match(/EASY碗/g)||[]).length,pot:(all.match(/鲜蔬锅/g)||[]).length};
   });
@@ -567,7 +570,10 @@ if(customers[i].lng&&hav(o.pos,[customers[i].lng,customers[i].lat])<0.08){ idx=i
       }
       o.match={i:idx,s:99,c:customers[idx],amb:false,auto:true};
     }
-    if(idx!==null&&todaySel.indexOf(idx)<0){ todaySel.push(idx); lit++; }
+    if(idx!==null){
+      if(o.dlMin){ var c0=customers[idx],tk=new Date().toDateString(); c0.dlM=(c0.dlM&&c0.dlD===tk)?Math.min(c0.dlM,o.dlMin):o.dlMin; c0.dlD=tk; }
+      if(todaySel.indexOf(idx)<0){ todaySel.push(idx); lit++; }
+    }
   });
   if(added||merged){ saveCust(); renderCustomers(); renderClist(); }
   saveToday(); updatePnum();
@@ -1004,7 +1010,9 @@ function showTab(id){
 TABS.forEach(function(t){document.getElementById('tab-'+t).addEventListener('click',function(){showTab(t);});});
 document.getElementById('goCust').addEventListener('click',function(){showTab('cust');});
 document.getElementById('psession').addEventListener('change',function(){
-  document.getElementById('pwinend').value = this.value==='dinner' ? '18:30' : '12:30';
+  var v=this.value;
+  document.getElementById('pwinend').value = v==='dinner' ? '18:30' : '12:30';
+  document.getElementById('pdepart').value = v==='dinner' ? '16:30' : '11:00';   // 切时段同步切出发，避免晚餐用上午出发排线
 });
 function savePlanParams(){
   planParams={session:document.getElementById('psession').value,
@@ -1069,10 +1077,13 @@ function riderPrice(pts,kmOut){
   // 1) 分桶：习惯时段匹配；送达截止统一按「窗口截止＋弹性」
   var sessOK=function(k){var t=k.t||'';return sess==='all'||t===''||t==='b'||t===(sess==='lunch'?'l':'d');};
   var mainPts=[],excluded=[];
+  var todayK=new Date().toDateString();
   live.forEach(function(i){
     var k=customers[i];
     if(!sessOK(k)){excluded.push(k);return;}
-    mainPts.push({k:k,dlm:winEndMin+flex});
+    var dlm=winEndMin+flex;
+    if(k.dlM&&k.dlD===todayK)dlm=Math.min(dlm,k.dlM+flex);   // 报单时间段头里的截止时刻优先（同样享受弹性）
+    mainPts.push({k:k,dlm:dlm});
   });
   if(!mainPts.length){
     var m0='本时段没有可排线的点。';

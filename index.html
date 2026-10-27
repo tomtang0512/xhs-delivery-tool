@@ -82,7 +82,7 @@
 </head>
 <body>
 <div class="panel">
-  <h3>🥗 壮壮FIT 配送助手 <span id="verTag" style="font-size:11px;color:#999;font-weight:normal">v2.22</span></h3>
+  <h3>🥗 壮壮FIT 配送助手 <span id="verTag" style="font-size:11px;color:#999;font-weight:normal">v2.24</span></h3>
   <div class="tabs">
     <button class="tabbtn on" id="tab-plan" type="button">🛵 排线</button>
     <button class="tabbtn" id="tab-cust" type="button">👥 客户</button>
@@ -1022,7 +1022,7 @@ document.getElementById('goCust').addEventListener('click',function(){showTab('c
 document.getElementById('psession').addEventListener('change',function(){
   var v=this.value;
   document.getElementById('pwinend').value = v==='dinner' ? '18:30' : '12:30';
-  document.getElementById('pdepart').value = v==='dinner' ? '17:00' : '11:00';   // 切时段同步切出发：晚=最晚窗尾18:30−90分保温，午=12:30−90
+  document.getElementById('pdepart').value = v==='dinner' ? '16:55' : '10:55';   // 切时段同步切出发：各窗趟打包=窗尾−50分保温（午早窗10:55/晚早窗16:55）
 });
 function savePlanParams(){
   planParams={session:document.getElementById('psession').value,
@@ -1072,7 +1072,7 @@ if(window.__rptBusy){ pset('⏳ <b>识别还在进行中</b>（新客地址定�
 var live=todaySel.filter(function(i){return customers[i];});
 if(!live.length){ pset('<span class="mid">今天还没有有单地址。正常流程：粘报单 → 「🔍 识别报单」→ 识别完成后会<b>自动点亮老客、新客入库上地图并直接排线</b>，全程不用手动点亮。也可以去客户页手动点亮「有单」。</span>'); return; }
   var sess=planParams.session||'lunch';
-  var departMin = planParams.depart ? hm2min(planParams.depart) : (sess==='dinner'?hm2min('17:30'):hm2min('11:00'));
+  var departMin = planParams.depart ? hm2min(planParams.depart) : (sess==='dinner'?hm2min('16:55'):hm2min('10:55'));
   var winEndMin = planParams.winEnd ? hm2min(planParams.winEnd) : (sess==='dinner'?hm2min('18:30'):hm2min('12:30'));
   var prep=+planParams.prep||0, speed=+planParams.speed||20, maxTrip=+planParams.maxTrip||55;
   var flex=(planParams.flex!==undefined && planParams.flex!==null)?+planParams.flex||0:30;
@@ -1095,14 +1095,14 @@ function riderPrice(pts,kmOut){
     if(!sessOK(k)){excluded.push(k);return;}
     var dlm=winEndMin+flex,ea=0;
     if(k.dlM&&k.dlD===todayK){dlm=Math.min(dlm,k.dlM);ea=(k.wsM!=null&&k.dlD===todayK)?Math.max(0,k.wsM):Math.max(0,k.dlM-45);}   // v2.22 报单窗口区间 [起点,窗尾]：起点=最早可送达，窗尾=硬时限；旧「X点前」折算 [X-45,X]
-    mainPts.push({k:k,dlm:dlm,m:oMeals[i]||k.meals||1,ea:ea});
+    mainPts.push({k:k,dlm:dlm,m:oMeals[i]||k.meals||1,ea:ea,rep:(k.dlM&&k.dlD===todayK)?1:0});
   });
   // 出发时间防呆：与时段/报单截止明显矛盾时自动修正（可手动改回）
   var minDlRaw=1e9,maxDlRaw=0,depOrig=min2hm(departMin),depSnap='';
   mainPts.forEach(function(mp){if(mp.k.dlM&&mp.k.dlD===todayK){if(mp.k.dlM<minDlRaw)minDlRaw=mp.k.dlM;if(mp.k.dlM>maxDlRaw)maxDlRaw=mp.k.dlM;}});
-  if(sess==='dinner'&&departMin<hm2min('16:00')){departMin=hm2min('17:00');depSnap='17:00';}
-  if(sess==='lunch'&&departMin>hm2min('13:00')){departMin=hm2min('11:00');depSnap='11:00';}
-  if(maxDlRaw&&departMin<maxDlRaw-90){departMin=maxDlRaw-90;depSnap=min2hm(departMin);}   // v2.22 保温纪律：打包/出发不早于「最晚窗尾−90分」（90分保温预算）
+  if(sess==='dinner'&&departMin<hm2min('16:00')){departMin=hm2min('16:55');depSnap='16:55';}
+  if(sess==='lunch'&&departMin>hm2min('13:00')){departMin=hm2min('10:55');depSnap='10:55';}
+  if(minDlRaw<1e9&&departMin<minDlRaw-50){departMin=minDlRaw-50;depSnap=min2hm(departMin);}   // v2.24 保温50分（升级保温版实测）：首趟打包=最早窗尾−50；各趟自己的打包下限由 tripDep 兑底
   if(depSnap){document.getElementById('pdepart').value=depSnap;planParams.depart=depSnap;}
   var depSnapNote=depSnap?('⏱ 出发时间从 <b>'+depOrig+'</b> 自动修正为 <b>'+depSnap+'</b>（与报单送达截止/时段矛盾，可在左上改回）'):'';
   if(!mainPts.length){
@@ -1116,8 +1116,8 @@ function riderPrice(pts,kmOut){
     var p=[mp.k.lng,mp.k.lat];
     var g=null;
     for(var gi=0;gi<groups.length;gi++){if(km(p,groups[gi].pos)<=MERGE_KM){g=groups[gi];break;}}
-    if(g){g.members.push(mp.k);g.min=Math.max(g.min,CX_MIN[mp.k.cx||'normal']);g.dlm=Math.min(g.dlm,mp.dlm);g.meals+=mp.m;g.ea=Math.max(g.ea||0,mp.ea);}
-    else groups.push({pos:p,members:[mp.k],min:CX_MIN[mp.k.cx||'normal'],dlm:mp.dlm,meals:mp.m,ea:mp.ea});
+    if(g){g.members.push(mp.k);g.min=Math.max(g.min,CX_MIN[mp.k.cx||'normal']);g.dlm=Math.min(g.dlm,mp.dlm);g.meals+=mp.m;g.ea=Math.max(g.ea||0,mp.ea);g.rep=(g.rep||mp.rep)?1:0;}
+    else groups.push({pos:p,members:[mp.k],min:CX_MIN[mp.k.cx||'normal'],dlm:mp.dlm,meals:mp.m,ea:mp.ea,rep:mp.rep?1:0});
   });
   groups.forEach(function(g){if(g.ea>g.dlm)g.ea=0;});   // 同址不同截止冲突时放弃最早约束，保证可解
   var glabel=function(g){return g.members.map(function(m){var rn=(window.__rptNames||{})[customers.indexOf(m)];return (rn&&rn.length)?rn.join('+'):m.name;}).join('+');};
@@ -1183,6 +1183,13 @@ function riderPrice(pts,kmOut){
     if(planParams.round&&ord.length){var tr=ride(cur,ORIGIN);dur+=tr;kmAcc+=tr*speed/60;finish+=tr;}
     return {ok:ok,dur:dur,km:kmAcc,arr:arr,finish:finish};
   }
+  // 5.5) v2.24 每趟打包下限：max(踩窗口起点反推, 趟内最晚窗尾−50分保温)。各窗各自打包（早窗趟 10:55/晚窗趟 11:40），接力班自然衔接
+  function repE(seg){var e=0;for(var q=0;q<seg.length;q++){var g=groups[seg[q]];if(g.rep&&g.dlm>e)e=g.dlm;}return e;}
+  function tripDep(seg,base){
+    var d=noWaitDep({seg:seg},base),e=repE(seg);
+    if(e&&e-50>d){var d2=e-50;if(segInfo(seg,d2).ok)return d2;return null;}   // 保温下限与本趟窗口时限冲突 → 该趟不可行，DP 会拆成各窗一趟
+    return d;
+  }
   // 6) 最优切割 DP：先最少「超限分钟」，再最少趟数，再总时长最短；并行班每趟同刻出发，顺序班接力出发
   //    （超限分钟 = 各趟 max(0,用时-单班上限) 之和：远点孤点必送时，优先让大簇自成一趟≤上限，而不是全簇陪远点绕路）
   function cutDP(forceSolo){
@@ -1192,8 +1199,9 @@ function riderPrice(pts,kmOut){
       f[i]={v:INF,t:INF,end:INF,d:INF};
       for(var j=0;j<i;j++){
         if(f[j].t>=INF)continue;
-        var dep=planParams.round?f[j].end:departMin;
         var seg=tour.slice(j,i);
+        var dep=tripDep(seg,planParams.round?f[j].end:departMin);   // v2.24 趟内打包时刻按本趟窗口倒推；null=保温与窗口冲突，拆
+        if(dep===null)continue;
         var info=segInfo(seg,dep);
         var okk=info.ok&&(info.dur<=maxTrip||forceSolo);   // 兜底：时限可行的趟即使超单班上限也放行
         if(!okk)continue;
@@ -1226,7 +1234,7 @@ function riderPrice(pts,kmOut){
     var t=departMin,allok=true,tot=0;
     trips.forEach(function(tr){
       var base=planParams.round?t:departMin;
-      var dep=noWaitDep(tr,base);
+      var dep=tripDep(tr.seg,base);if(dep===null)dep=noWaitDep(tr,base);
       var info=segInfo(tr.seg,dep);
       tr.info=info;tr.dep=dep;
       tot+=info.dur;

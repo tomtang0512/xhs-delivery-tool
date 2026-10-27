@@ -82,7 +82,7 @@
 </head>
 <body>
 <div class="panel">
-  <h3>🥗 壮壮FIT 配送助手 <span id="verTag" style="font-size:11px;color:#999;font-weight:normal">v2.27</span></h3>
+  <h3>🥗 壮壮FIT 配送助手 <span id="verTag" style="font-size:11px;color:#999;font-weight:normal">v2.28</span></h3>
   <div class="tabs">
     <button class="tabbtn on" id="tab-plan" type="button">🛵 排线</button>
     <button class="tabbtn" id="tab-cust" type="button">👥 客户</button>
@@ -1021,7 +1021,7 @@ function loadP2El(){
 loadP2El();
 // ===== 骑手档案（v2.27）：按师傅各自速度/住址排线；顺序班末趟终点尽量近家，回程变下班路 =====
 var riders=[];try{riders=JSON.parse(localStorage.getItem('riders')||'[]');}catch(e){}
-if(!riders.length){riders=[{name:'王师傅',home:'伏龙小区',pos:null,speed:null,notes:''}];saveRiders();}
+if(!riders.length){riders=[{name:'王师傅',home:'伏龙小区',pos:null,speed:28,notes:'道路骑行≈30km/h（10.15~10.20履约到达回归25段）；每点停留4~5分；排线参数用28保守'}];saveRiders();}
 function saveRiders(){try{localStorage.setItem('riders',JSON.stringify(riders));}catch(e){}}
 function curRider(){for(var i=0;i<riders.length;i++)if(riders[i].name===planParams.rider)return riders[i];return riders[0]||null;}
 planParams.rider=planParams.rider||(riders[0]?riders[0].name:'');
@@ -1035,7 +1035,7 @@ function riderEdit(){
   if(!r){r={name:name,home:'',pos:null,speed:null,notes:''};riders.push(r);}
   var home=prompt('『'+name+'』住址（越具体越好，如「伏龙小区」）：',r.home||'');if(home===null)return;
   r.home=home;r.pos=null;
-  var sp=prompt('『'+name+'』实测全含速度 km/h（含停车/上楼/打电话；留空用全局速度）：',r.speed||'');
+  var sp=prompt('『'+name+'』道路骑行速度 km/h（不含停留——交付时间按复杂度另加；留空用全局速度）：',r.speed||'');
   if(sp!==null&&+sp>0)r.speed=+sp;
   var nt=prompt('『'+name+'』习惯/备注（可留空，之后随时补充）：',r.notes||'');
   if(nt!==null)r.notes=nt;

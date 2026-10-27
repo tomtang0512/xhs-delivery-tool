@@ -82,7 +82,7 @@
 </head>
 <body>
 <div class="panel">
-  <h3>🥗 壮壮FIT 配送助手 <span id="verTag" style="font-size:11px;color:#999;font-weight:normal">v2.28</span></h3>
+  <h3>🥗 壮壮FIT 配送助手 <span id="verTag" style="font-size:11px;color:#999;font-weight:normal">v2.29</span></h3>
   <div class="tabs">
     <button class="tabbtn on" id="tab-plan" type="button">🛵 排线</button>
     <button class="tabbtn" id="tab-cust" type="button">👥 客户</button>
@@ -235,14 +235,25 @@ var DEFAULT_CUSTOMERS = [
   {name:'青度健身（香月湖）',addr:'吉庆一路香月湖6栋负1楼',lng:104.058985,lat:30.555518,t:'l',meals:2,note:'健身房固定点位；韩先生 午12:00前 2餐'},
   {name:'熠健身（汇锦城店）',addr:'盛邦街100号汇锦城8栋C座',lng:104.054242,lat:30.556066,meals:3,note:'自配送 14:00 ×3餐；不进排线'},
   {name:'朗诗熙华府',addr:'盛治街777号朗诗熙华府12栋2302',lng:104.042105,lat:30.552414,t:'l',meals:1,cx:'hard',note:'李冠霖 12:31~13:00特殊窗；上楼2302；近店'},
-  {name:'烁屿健身（中和）',addr:'吉龙二街246号',lng:104.089438,lat:30.535391,t:'b',meals:2,note:'健身房固定点位（超级店）；邱静婷 12:00，无电话送前台+拍照'},
+  {name:'烁屿健身（中和）',addr:'吉龙二街246号',lng:104.089438,lat:30.535391,t:'b',meals:2,note:'健身房固定点位（超级店）；邱静婷/bunny谢/毛教练 常多单同址；无电话送前台+拍照'},
   {name:'烁屿健身（中和精品店）',addr:'梓州大道辅路与应龙路口（精品店）',lng:104.082473,lat:30.532688,t:'b',meals:1,note:'试吃投放点；9.13试吃8餐'},
   {name:'荟创空间233',addr:'吉龙二街430号（陆肖地铁站A口）',lng:104.095814,lat:30.535185,t:'b',meals:1,cx:'easy',note:'健身房固定点位，与乡村兔同楼'},
   {name:'乡村兔（中和店）',addr:'吉龙二街430号乡村兔鲜兔火锅',lng:104.096008,lat:30.535474,t:'b',meals:1,note:'马伯伦 12:00；到店打电话；试吃/新客投放点'},
   {name:'嘉年华青年城',addr:'锦韵路533号嘉年华青年城smart公寓',lng:104.081368,lat:30.535502,t:'b',meals:1,note:'试吃投放点'},
-  {name:'新怡花园C区',addr:'观东一街555号新怡花园C区-6栋',lng:104.08661,lat:30.531884,t:'l',meals:2,note:'试吃投放点；9.13送2餐'}
+  {name:'新怡花园C区',addr:'观东一街555号新怡花园C区-6栋',lng:104.08661,lat:30.531884,t:'l',meals:2,note:'试吃投放点；9.13送2餐'},
+  {name:'半伴健身（银泰城5楼）',addr:'银泰城商场5楼半伴健身',lng:104.059159,lat:30.541043,t:'l',meals:2,note:'李店 15928090706；12:00前 常一次2餐；健身房固定点位'},
+  {name:'梵怡诺瑜伽馆（银泰城3楼）',addr:'银泰城商场3楼梵怡诺瑜伽馆',lng:104.059159,lat:30.541043,t:'d',meals:2,note:'何小倩/缑琪 17:00前 常一次2餐；何小倩需注意餐温（曾嫌过凉）'},
+  {name:'王凡·天祥广场',addr:'天府大道中段500号东方希望天祥广场A座外卖柜',lng:104.067854,lat:30.552968,t:'l',meals:1,note:'王凡 12:30前；外卖柜'},
+  {name:'初九·凯莱丽景雅筑',addr:'剑南大道南段1399号凯莱·丽景雅筑7栋4单元3号',lng:104.044668,lat:30.518481,t:'l',meals:1,note:'初九 12:30前；上楼；健身房合作点'},
+  {name:'阿妍·誉峰遇见',addr:'交子大道500号誉峰遇见A座A2433',lng:104.050965,lat:30.583119,t:'l',meals:1,note:'阿妍 12:30前；上楼'},
+  {name:'孙先生·软件园C区柜',addr:'天府软件园C区-4栋外卖柜',lng:104.071558,lat:30.539804,t:'l',meals:1,note:'孙先生 ⏱整单备注12点前（比窗尾严）；外卖柜'},
+  {name:'小纸条·空港星汇',addr:'空港星汇-8栋一单元305',lng:103.981371,lat:30.549144,t:'l',meals:1,cx:'hard',note:'小纸条 12:30前；少油少盐；远点~10.5km'},
+  {name:'杨妍麟·金房大榕湾',addr:'石羊场路555号金房大榕湾2-1802',lng:104.042575,lat:30.583525,t:'l',meals:1,note:'杨妍麟 12:30前；上楼'},
+  {name:'杨振·四川富润国际',addr:'四川富润国际广场-外卖柜',lng:104.07005,lat:30.554,t:'d',meals:1,note:'杨振 17:30前；送到打电话；注意餐温'},
+  {name:'杨文越·梵怡诺（清凤时代城）',addr:'清凤时代城梵怡诺瑜伽馆（同店小区）',lng:104.045045,lat:30.556878,t:'d',meals:1,note:'异业合作体验餐；距店~0.1km'},
+  {name:'胡·青度健身（天府四街店）',addr:'青度健身天府四街店',lng:104.063725,lat:30.541525,t:'d',meals:1,note:'青度品牌第二家门店；19:45晚窗外时刻；2026-10-20首单'}
 ];
-var CUST_VER = 4;   // 点位库版本：以后改了 DEFAULT_CUSTOMERS 就把这里 +1，老浏览器打开会弹同步提示（v4：取消逐户时限，统一标准窗口）
+var CUST_VER = 5;   // 点位库版本：以后改了 DEFAULT_CUSTOMERS 就把这里 +1，老浏览器打开会弹同步提示（v5：固化10.20报单11个活跃点+烁屿前台多客户备注）
 function getVer(){ try{ var v=parseInt(localStorage.getItem('cust_ver'),10); return isNaN(v)?0:v; }catch(e){ return 0; } }
 function setVer(v){ try{ localStorage.setItem('cust_ver', String(v)); }catch(e){} }
 // 报单原文粘贴进批量名单时的垃圾行识别（电话/菜品/统计行等，不是真实客户）

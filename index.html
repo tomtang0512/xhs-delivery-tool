@@ -325,7 +325,7 @@ if(localStorage.getItem('customers') && getVer()<CUST_VER && sessionStorage.getI
 function showUpgradeBanner(){
   var bar=document.createElement('div');
   bar.style.cssText='position:fixed;top:0;left:0;right:0;z-index:99999;background:#e67e22;color:#fff;padding:8px 12px;font-size:13px;display:flex;gap:8px;align-items:center;box-shadow:0 2px 6px rgba(0,0,0,.25)';
-  bar.innerHTML='<span style="flex:1">🔄 点位库已更新（v'+CUST_VER+'：取消逐户「送达时限」，统一按 午11:00~12:30 / 晚17:00~18:30 两窗排线），点「一键同步」换成最新列表（今日有单标记保留）</span>';
+  bar.innerHTML='<span style="flex:1">🔄 点位库已更新（v'+CUST_VER+'：固化今日报单 11 个活跃点——半伴/梵怡诺银泰/天祥/凯莱/誉峰/C区柜/空港星汇/大榕湾/富润/梵怡诺清凤/青度四街），点「一键同步」换成最新列表（自己加过的点位会保留）</span>';
   var b1=document.createElement('button'); b1.textContent='一键同步';
   b1.style.cssText='flex-shrink:0;background:#fff;color:#e67e22;border:none;border-radius:6px;padding:4px 10px;font-weight:bold;cursor:pointer';
   var b2=document.createElement('button'); b2.textContent='暂不';
@@ -336,9 +336,11 @@ function showUpgradeBanner(){
   document.body.appendChild(bar);
 }
 function applyUpgrade(){
-  var selNames=todaySel.map(function(i){ return customers[i]?customers[i].name:null; }).filter(Boolean);
-  customers=DEFAULT_CUSTOMERS.slice();
-  saveCust(); setVer(CUST_VER);
+var selNames=todaySel.map(function(i){ return customers[i]?customers[i].name:null; }).filter(Boolean);
+var locals=customers.slice();
+customers=DEFAULT_CUSTOMERS.slice();
+locals.forEach(function(k){ if(k&&k.name&&!customers.some(function(d){return d.name===k.name;})) customers.push(k); });  // 本地自加点按名字保留
+saveCust(); setVer(CUST_VER);
   todaySel=[];
   customers.forEach(function(k,i){ if(selNames.indexOf(k.name)>-1) todaySel.push(i); });
   saveToday();

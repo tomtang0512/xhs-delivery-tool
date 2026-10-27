@@ -82,7 +82,7 @@
 </head>
 <body>
 <div class="panel">
-  <h3>🥗 壮壮FIT 配送助手 <span id="verTag" style="font-size:11px;color:#999;font-weight:normal">v2.24</span></h3>
+  <h3>🥗 壮壮FIT 配送助手 <span id="verTag" style="font-size:11px;color:#999;font-weight:normal">v2.25</span></h3>
   <div class="tabs">
     <button class="tabbtn on" id="tab-plan" type="button">🛵 排线</button>
     <button class="tabbtn" id="tab-cust" type="button">👥 客户</button>
@@ -476,6 +476,13 @@ function geoOne(text){
     return null;
   });
 }
+function parseDeadlineTime(s){   // 从整单/本餐备注文本提取「HH:MM前/点/送达」硬截止时间（分钟），无则返回 null
+  if(!s||s==='无') return null;
+  var m;
+  if((m=s.match(/(\d{1,2})\s*[:：]\s*(\d{2})/))) return (+m[1])*60+(+m[2]);   // 12:00 / 12：00
+  if((m=s.match(/(\d{1,2})\s*点\s*(\d{1,2})?\s*分?/))){ var h=+m[1],mi=+(m[2]||0); if(h<24&&mi<60) return h*60+mi; }   // 12点30分 / 12点
+  return null;
+}
 function parseRptText(raw){
   var lines=raw.replace(/\r/g,'').split('\n');
   var stats={},orders=[],group='',cur=null;
@@ -485,16 +492,16 @@ function parseRptText(raw){
     var m;
     if((m=L.match(/[-—=]{3,}\s*(.+?)\s*[-—=]{3,}/))){ push(); group=m[1]; continue; }   // 不锚定行首：兼容「以此为准-----17:00之前-----」
     if(/^(上午|中午|下午|晚上)/.test(L)&&L.indexOf('：')>-1&&L.indexOf('#')<0){ push(); group=L; continue; }
-    if((m=L.match(/^#(\d+)\s*（([^）]*)）?/))){ push(); cur={no:+m[1],tag:m[2]||'',dishes:[],group:group}; continue; }
-    if((m=L.match(/^#(\d+)/))){ push(); cur={no:+m[1],tag:'',dishes:[],group:group}; continue; }
+    if((m=L.match(/^[⭕🔴✅]?\s*#(\d+)\s*（([^）]*)）?/))){ push(); cur={no:+m[1],tag:m[2]||'',dishes:[],group:group}; continue; }
+    if((m=L.match(/^[⭕🔴✅]?\s*#(\d+)/))){ push(); cur={no:+m[1],tag:'',dishes:[],group:group}; continue; }   // ⭕ 前缀容错：新报单格式「⭕#12」直接开头
     if(!cur){
       var mm=L.match(/^(PRO碗|EASY碗|鲜蔬锅)\s*(\d+)\s*个?$/);
       if(mm&&group==='') stats[mm[1]]=(stats[mm[1]]||0)+(+mm[2]);
       continue;
     }
-    if(/^(用户|电话|地址|特殊备注)[：:]/.test(L)){
-      var k=L.match(/^(用户|电话|地址|特殊备注)/)[1], v=L.replace(/^(用户|电话|地址|特殊备注)[：:]/,'').trim();
-      if(k==='用户')cur.user=v; else if(k==='电话')cur.phone=v; else if(k==='地址')cur.addr=v; else cur.note=v;
+    if(/^(用户|电话|地址|本餐备注|特殊备注|整单备注)[：:]/.test(L)){
+      var k=L.match(/^(用户|电话|地址|本餐备注|特殊备注|整单备注)/)[1], v=L.replace(/^(用户|电话|地址|本餐备注|特殊备注|整单备注)[：:]/,'').trim();
+      if(k==='用户')cur.user=v; else if(k==='电话')cur.phone=v; else if(k==='地址')cur.addr=v; else if(k==='整单备注')cur.memo=v; else cur.note=v;   // 本餐备注/特殊备注 → note；整单备注 → memo
       continue;
     }
     if(!cur.user&&!/^[-—=]{3,}$/.test(L)) cur.dishes.push(L);
@@ -512,8 +519,10 @@ function parseRptText(raw){
     if(tms.length>=2){o.winS=tms[0];o.winE=tms[tms.length-1];}
     else if(tms.length===1){o.winE=tms[0];o.winS=Math.max(0,tms[0]-45);}   // 旧「X点前」按新窗口宽 45 分折算 [X-45, X]
     if(tms.length)o.dlMin=o.winE;
+    o.dlMemo=parseDeadlineTime(o.memo||'')||parseDeadlineTime(o.note||'');   // 整单/本餐备注里的硬截止（如「12点之前送达」）；从严优先于组头窗尾
+    if(o.dlMemo!=null){ o.dlMin=(o.dlMin!=null?Math.min(o.dlMin,o.dlMemo):o.dlMemo); }
     var all=o.dishes.join('');
-    o.types={pro:(all.match(/PRO碗/g)||[]).length,easy:(all.match(/EASY碗/g)||[]).length,pot:(all.match(/鲜蔬锅/g)||[]).length};
+    o.types={pro:(all.match(/PRO碗/gi)||[]).length,easy:(all.match(/EASY碗/gi)||[]).length,pot:(all.match(/鲜蔬锅/g)||[]).length};
   });
   return {title:(lines[0]||'').trim(),stats:stats,orders:orders};
 }
@@ -576,8 +585,8 @@ if(customers[i].lng&&hav(o.pos,[customers[i].lng,customers[i].lat])<0.08){ idx=i
     if(idx!==null){
       var tn=window.__rptNames[idx]||(window.__rptNames[idx]=[]);   // 今日报单用户名覆盖层：匹配到档案旧点位时，标签显示今天的用户
       if(o.user&&tn.indexOf(o.user)<0)tn.push(o.user);
-      if(o.winE){ var c0=customers[idx],tk=new Date().toDateString();   // 窗口起点/窗尾都按今日报单叠加：dlm取最早窗尾（硬时限），ea取最晚窗口起点
-        c0.dlM=(c0.dlM&&c0.dlD===tk)?Math.min(c0.dlM,o.winE):o.winE;
+      if(o.dlMin!=null){ var c0=customers[idx],tk=new Date().toDateString();   // dlMin 已综合组头窗尾与整单/本餐备注硬截止（从严）；dlm取最早，ea取最晚窗口起点
+        c0.dlM=(c0.dlM&&c0.dlD===tk)?Math.min(c0.dlM,o.dlMin):o.dlMin;
         c0.wsM=(c0.wsM&&c0.dlD===tk)?Math.max(c0.wsM,o.winS||0):o.winS;
         c0.dlD=tk; }
       if(todaySel.indexOf(idx)<0){ todaySel.push(idx); lit++; }
@@ -616,7 +625,7 @@ var out=document.getElementById('rptout');
       else if(o.geoFail) h+='<span class="tag" style="background:#c0392b">新客·定位失败（未纳入，需手动处理）</span>';
       else if(o.pos) h+='<span class="tag" style="background:#e67e22">🆕新客</span>';
       else h+='<span class="tag" style="background:#95a5a6">新客·定位中…</span>';
-      h+=' 🍱×'+o.meals+(o.types.pro?' ·PRO×'+o.types.pro:'')+(o.types.easy?' ·EASY×'+o.types.easy:'')+(o.types.pot?' ·鲜蔬锅×'+o.types.pot:'')+(o.tag?' ·⏱'+escHtml(o.tag):'')+(o.group?' ·'+escHtml(o.group):'')+'<br><span style="color:#999">'+escHtml(o.addr||'')+'</span>'+(o.note&&o.note!=='无'?' <span class="bad">❗'+escHtml(o.note)+'</span>':'')+'</div>';
+      h+=' 🍱×'+o.meals+(o.types.pro?' ·PRO×'+o.types.pro:'')+(o.types.easy?' ·EASY×'+o.types.easy:'')+(o.types.pot?' ·鲜蔬锅×'+o.types.pot:'')+(o.tag?' ·⏱'+escHtml(o.tag):'')+(o.group?' ·'+escHtml(o.group):'')+(o.dlMemo!=null?' ·<b style="color:#c0392b">⏱备注截止 '+min2hm(o.dlMemo)+'</b>':'')+'<br><span style="color:#999">'+escHtml(o.addr||'')+'</span>'+(o.note&&o.note!=='无'?' <span class="bad">❗'+escHtml(o.note)+'</span>':'')+(o.memo&&o.memo!=='无'?' <span style="color:#c60">📌'+escHtml(o.memo)+'</span>':'')+'</div>';
     });
     if(rptCls){
       h+='<div style="margin-top:6px"><b>🚗 成趟建议</b>（直线相距≤0.9km 归为同一波）</div>';

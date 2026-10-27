@@ -82,7 +82,7 @@
 </head>
 <body>
 <div class="panel">
-  <h3>🥗 壮壮FIT 配送助手 <span id="verTag" style="font-size:11px;color:#999;font-weight:normal">v2.25</span></h3>
+  <h3>🥗 壮壮FIT 配送助手 <span id="verTag" style="font-size:11px;color:#999;font-weight:normal">v2.27</span></h3>
   <div class="tabs">
     <button class="tabbtn on" id="tab-plan" type="button">🛵 排线</button>
     <button class="tabbtn" id="tab-cust" type="button">👥 客户</button>
@@ -120,6 +120,7 @@
 <span style="font-size:12px">单班上限</span><input id="pmaxtrip" type="number" class="gnum" min="15" max="180" style="width:56px">
 <span style="font-size:12px">分</span>
 <label style="font-size:12px;margin-left:4px"><input type="checkbox" id="pround"> 送完回店（顺序班）</label>
+<span style="font-size:12px;margin-left:8px">骑手</span><select id="prider" style="font-size:12px;max-width:110px"></select>
 </div>
 <div class="addrow" style="align-items:center">
 <span style="font-size:12px">闪送计费：起步</span><input id="fstart" type="number" class="gnum" min="1">
@@ -1000,7 +1001,7 @@ document.getElementById('creset').onclick=function(){
 
 // ===== 今日排线 v2（多骑手多趟：时间窗 + 单班上限 + 大巡游最优切割 Route-First/Cluster-Second）=====
 var MERGE_KM=0.1;   // 直线多少公里内视为同一目的地（送达时间只算一次）
-var planParams={session:'lunch',speed:20,prep:0,depart:'11:00',round:false,maxTrip:55,winEnd:'12:30',flex:30,fstart:13,fkm:3,fper:2};
+var planParams={session:'lunch',speed:20,prep:0,depart:'11:00',round:true,maxTrip:55,winEnd:'12:30',flex:30,fstart:13,fkm:3,fper:2};   // v2.26 默认顺序班：单人骑手接力
 try{var pp=JSON.parse(localStorage.getItem('planParams'));if(pp)planParams=Object.assign(planParams,pp);}catch(e){}
 var planLines=[];
 var TRIP_COLORS=['#e91e63','#2980b9','#27ae60','#e67e22','#8e44ad','#00838f','#c0392b','#16a085'];
@@ -1018,6 +1019,37 @@ function loadP2El(){
   document.getElementById('fper').value=planParams.fper;
 }
 loadP2El();
+// ===== 骑手档案（v2.27）：按师傅各自速度/住址排线；顺序班末趟终点尽量近家，回程变下班路 =====
+var riders=[];try{riders=JSON.parse(localStorage.getItem('riders')||'[]');}catch(e){}
+if(!riders.length){riders=[{name:'王师傅',home:'伏龙小区',pos:null,speed:null,notes:''}];saveRiders();}
+function saveRiders(){try{localStorage.setItem('riders',JSON.stringify(riders));}catch(e){}}
+function curRider(){for(var i=0;i<riders.length;i++)if(riders[i].name===planParams.rider)return riders[i];return riders[0]||null;}
+planParams.rider=planParams.rider||(riders[0]?riders[0].name:'');
+function renderRiderSel(){var sel=document.getElementById('prider');if(!sel)return;
+  sel.innerHTML=riders.map(function(r){return '<option'+(r.name===planParams.rider?' selected':'')+'>'+escHtml(r.name)+'</option>';}).join('')+'<option value="__new">＋新建/编辑…</option>';}
+function applyRiderSpeed(){var r=curRider();if(r&&r.speed){planParams.speed=r.speed;document.getElementById('pspeed').value=r.speed;}}
+function ensureRiderPos(){var r=curRider();if(r&&r.home&&!r.pos){geoOne(r.home).then(function(loc){if(loc){r.pos=[loc.lng,loc.lat];saveRiders();}});}}
+function riderEdit(){
+  var name=prompt('骑手名字：');if(!name)return;
+  var r=null;for(var i=0;i<riders.length;i++)if(riders[i].name===name)r=riders[i];
+  if(!r){r={name:name,home:'',pos:null,speed:null,notes:''};riders.push(r);}
+  var home=prompt('『'+name+'』住址（越具体越好，如「伏龙小区」）：',r.home||'');if(home===null)return;
+  r.home=home;r.pos=null;
+  var sp=prompt('『'+name+'』实测全含速度 km/h（含停车/上楼/打电话；留空用全局速度）：',r.speed||'');
+  if(sp!==null&&+sp>0)r.speed=+sp;
+  var nt=prompt('『'+name+'』习惯/备注（可留空，之后随时补充）：',r.notes||'');
+  if(nt!==null)r.notes=nt;
+  saveRiders();planParams.rider=name;applyRiderSpeed();
+  try{localStorage.setItem('planParams',JSON.stringify(planParams));}catch(e){}
+  renderRiderSel();ensureRiderPos();
+}
+document.getElementById('prider').addEventListener('change',function(){var v=this.value;
+  if(v==='__new'){renderRiderSel();riderEdit();return;}
+  planParams.rider=v;applyRiderSpeed();
+  try{localStorage.setItem('planParams',JSON.stringify(planParams));}catch(e){}
+  ensureRiderPos();
+});
+renderRiderSel();applyRiderSpeed();ensureRiderPos();
 // 选项卡切换：排线/客户/接单判断/说明
 var TABS=['plan','cust','judge','help'];
 function showTab(id){
@@ -1038,7 +1070,8 @@ function savePlanParams(){
     speed:+document.getElementById('pspeed').value||20,prep:+document.getElementById('pprep').value||0,
     depart:document.getElementById('pdepart').value||'',round:document.getElementById('pround').checked,
     maxTrip:+document.getElementById('pmaxtrip').value||55,winEnd:document.getElementById('pwinend').value||'12:30',flex:(document.getElementById('pflex').value===''?30:+document.getElementById('pflex').value)||0,
-    fstart:+document.getElementById('fstart').value||13,fkm:+document.getElementById('fkm').value||3,fper:+document.getElementById('fper').value||2};
+    fstart:+document.getElementById('fstart').value||13,fkm:+document.getElementById('fkm').value||3,fper:+document.getElementById('fper').value||2,
+    rider:planParams.rider||''};
   try{localStorage.setItem('planParams',JSON.stringify(planParams));}catch(e){}
 }
 function pset(html){document.getElementById('presult').innerHTML=html;}
@@ -1086,6 +1119,9 @@ if(!live.length){ pset('<span class="mid">今天还没有有单地址。正常�
   var prep=+planParams.prep||0, speed=+planParams.speed||20, maxTrip=+planParams.maxTrip||55;
   var flex=(planParams.flex!==undefined && planParams.flex!==null)?+planParams.flex||0:30;
   var ride=function(a,b){return km(a,b)*ROAD_K/speed*60;};
+  // v2.27 骑手档案：末趟终点尽量近家（回程=下班路，不空跑）
+  var rider=curRider();ensureRiderPos();
+  var homeP=(planParams.round&&rider&&rider.pos)?rider.pos:null;
 // 骑手查表班价（《配送内部小抄 v2》）：点数×全线公里交叉查表，整趟一口价；1km 内并点已在排线分组时完成
 var RIDER_TAB=[[15,20,25,30,35],[25,30,35,40,45],[30,35,40,45,50],[35,40,45,50,55]];
 function riderPrice(pts,kmOut){
@@ -1203,19 +1239,24 @@ function riderPrice(pts,kmOut){
   //    （超限分钟 = 各趟 max(0,用时-单班上限) 之和：远点孤点必送时，优先让大簇自成一趟≤上限，而不是全簇陪远点绕路）
   function cutDP(forceSolo){
     var INF=1e9;
-    var f=[{v:0,t:0,end:departMin,d:0}],cut=[-1];
+    var f=[{v:0,t:0,end:departMin,d:0,h:0}],cut=[-1];
+    function better(c,b){if(c.v!==b.v)return c.v<b.v;if(c.t!==b.t)return c.t<b.t;
+      var e1=planParams.round?c.end:c.d,e2=planParams.round?b.end:b.d;
+      if(e1!==e2)return e1<e2;return c.h<b.h;}   // v2.27 末趟终点近家作末位平局判据
     for(var i=1;i<=n;i++){
-      f[i]={v:INF,t:INF,end:INF,d:INF};
+      f[i]={v:INF,t:INF,end:INF,d:INF,h:INF};
       for(var j=0;j<i;j++){
         if(f[j].t>=INF)continue;
         var seg=tour.slice(j,i);
         var dep=tripDep(seg,planParams.round?f[j].end:departMin);   // v2.24 趟内打包时刻按本趟窗口倒推；null=保温与窗口冲突，拆
         if(dep===null)continue;
+        if(planParams.round&&dep<f[j].end)dep=f[j].end;   // v2.26 单人接力：骑手回店前不能出发；晚打包无碍保温（打包≥窗尾−50即可）
         var info=segInfo(seg,dep);
         var okk=info.ok&&(info.dur<=maxTrip||forceSolo);   // 兜底：时限可行的趟即使超单班上限也放行
         if(!okk)continue;
-        var cand={v:f[j].v+Math.max(0,info.dur-maxTrip),t:f[j].t+1,end:info.finish,d:f[j].d+info.dur};
-        if(cand.v<f[i].v||(cand.v===f[i].v&&(cand.t<f[i].t||(cand.t===f[i].t&&(planParams.round?cand.end<f[i].end:cand.d<f[i].d))))){f[i]=cand;cut[i]=j;}
+        var cand={v:f[j].v+Math.max(0,info.dur-maxTrip),t:f[j].t+1,end:info.finish,d:f[j].d+info.dur,
+          h:(f[j].h||0)+((i===n&&homeP)?km(groups[tour[i-1]].pos,homeP):0)};   // v2.27 仅末趟计「末点离家距离」
+        if(better(cand,f[i])){f[i]=cand;cut[i]=j;}
       }
     }
     return f[n].t>=INF?null:{f:f,cut:cut};
@@ -1244,8 +1285,9 @@ function riderPrice(pts,kmOut){
     trips.forEach(function(tr){
       var base=planParams.round?t:departMin;
       var dep=tripDep(tr.seg,base);if(dep===null)dep=noWaitDep(tr,base);
+      if(planParams.round&&dep<base)dep=base;   // v2.26 单人接力：出发不早于骑手回店
       var info=segInfo(tr.seg,dep);
-      tr.info=info;tr.dep=dep;
+      tr.info=info;tr.dep=dep;tr.dep0=dep;
       tot+=info.dur;
       if(!info.ok||(info.dur>maxTrip&&tr.seg.length>1))allok=false;
       t=info.finish;
@@ -1253,14 +1295,18 @@ function riderPrice(pts,kmOut){
     return {allok:allok,end:t,tot:tot};
   }
   var chain=chainEval();
-  trips.forEach(function(tr){
+  trips.forEach(function(tr,ti){
+    var isLast=(ti===trips.length-1);
     var improved=true,guard=0;
     while(improved&&guard<6){
       improved=false;guard++;
       for(var a=0;a<tr.seg.length-1;a++)for(var b=a+1;b<tr.seg.length;b++){
         var cand=tr.seg.slice();var s2=cand.splice(a,b-a+1);s2.reverse();cand.splice.apply(cand,[a,0].concat(s2));
         var c2=segInfo(cand,tr.dep);
-        if(c2.ok&&(c2.dur<=maxTrip||cand.length===1)&&c2.dur<tr.info.dur-1e-9){tr.seg=cand;tr.info=c2;improved=true;}
+        var hd1=(isLast&&homeP)?km(groups[cand[cand.length-1]].pos,homeP):0;
+        var hd0=(isLast&&homeP)?km(groups[tr.seg[tr.seg.length-1]].pos,homeP):0;
+        var take=c2.ok&&(c2.dur<=maxTrip||cand.length===1)&&(c2.dur<tr.info.dur-1e-9||(isLast&&homeP&&c2.dur<tr.info.dur+3&&hd1<hd0-0.3));   // v2.27 末趟允许+3分内换「末点离家近3百米以上」
+        if(take){tr.seg=cand;tr.info=c2;improved=true;}
       }
     }
   });
@@ -1316,9 +1362,9 @@ function riderPrice(pts,kmOut){
   window._planning=true;
   pset('排线中…正在调高德骑行API测真实距离（点越多越慢，约几秒到十几秒）');
   var apiLegs=[];
-  trips.forEach(function(tr){
+  trips.forEach(function(tr,ti){
     var seq=[ORIGIN].concat(tr.seg.map(function(gi){return groups[gi].pos;}));
-    if(planParams.round&&tr.seg.length)seq.push(ORIGIN);
+    if(planParams.round&&tr.seg.length)seq.push((homeP&&ti===trips.length-1)?homeP:ORIGIN);   // v2.27 末趟回程=到家，不空跑回店
     for(var q=0;q<seq.length-1;q++)apiLegs.push([seq[q],seq[q+1]]);
   });
   var flashList=[];
@@ -1338,8 +1384,12 @@ function riderPrice(pts,kmOut){
     planLines.forEach(function(l){map.remove(l);});planLines=[];
     var li=0,totKm=0,totMeals=0,totFlash=0,totRider=0,blocks=[];
     var prevFinish=departMin;   // 顺序班：下一趟出发＝上一趟实测回店时刻，避免估算/实测不一致
+    var relaySched='';
     trips.forEach(function(tr,ti){
-      if(planParams.round&&ti>0)tr.dep=prevFinish;
+      var prevReturn=prevFinish;   // 上一趟实测回店（循环末尾才更新 prevFinish，卡片渲染前先存）
+      var packFloor=repE(tr.seg)?repE(tr.seg)-50:0;   // 本趟保温下限（打包不早于窗尾−50）
+      if(planParams.round&&ti>0)tr.dep=Math.max(prevReturn,tr.dep0||tr.dep);   // v2.26 出发=max(上一趟回店, 本趟打包下限/踩窗反推)，不早于保温下限
+      var packAt=Math.max(packFloor,tr.dep);
       var seq=[ORIGIN].concat(tr.seg.map(function(gi){return groups[gi].pos;}));
       var back=planParams.round&&tr.seg.length;
       var kmAcc=0,etas=[],clock=tr.dep+prep,stopMin=0,late=false,slack=1e9,waited=0;
@@ -1364,7 +1414,9 @@ function riderPrice(pts,kmOut){
         kmAcc+=dk2;clock+=dk2/speed*60;
         if(r2&&r2.pts&&r2.pts.length>1)planLines.push(new AMap.Polyline({path:r2.pts,strokeColor:TRIP_COLORS[ti%TRIP_COLORS.length],strokeWeight:5,strokeOpacity:.9,showDir:true,map:map,zIndex:170}));
       }
+      var homeBack=back&&homeP&&ti===trips.length-1;
       prevFinish=clock;
+      if(planParams.round)relaySched+=(relaySched?' → ':'')+'趟'+(ti+1)+' 打包'+min2hm(packAt)+'/出发'+min2hm(tr.dep)+'→'+(homeBack?'到家':'回店')+min2hm(clock);
       tr.latest=(slack===1e9||slack<0)?tr.dep:tr.dep+slack;   // 最晚出发也按实测重算
       var names=tr.seg.map(function(gi){return glabel(groups[gi]);});
       var meals=tr.seg.reduce(function(s,gi){return s+groups[gi].meals;},0);
@@ -1380,20 +1432,26 @@ function riderPrice(pts,kmOut){
       totRider+=rp.p;
       blocks.push('<div style="margin:8px 0;padding:8px 10px;border:1px solid '+col+';border-left:5px solid '+col+';border-radius:8px;background:#fff">'
         +'<b style="color:'+col+'">🛵 第'+(ti+1)+'趟</b>（'+tr.seg.length+'点'+meals+'餐）：出餐点 → '+names.join(' → ')
-        +'<br>⏱ 出发 <b>'+min2hm(tr.dep)+'</b>｜最晚 '+min2hm(tr.latest)+' 出发｜ETA：'+etas.map(function(e2){return glabel(groups[e2.gi])+' '+min2hm(e2.t);}).join('、')
+        +'<br>⏱ 打包 <b>'+min2hm(packAt)+'</b>｜出发 <b>'+min2hm(tr.dep)+'</b>｜最晚 '+min2hm(tr.latest)+' 出发｜ETA：'+etas.map(function(e2){return glabel(groups[e2.gi])+' '+min2hm(e2.t);}).join('、')
+        +(planParams.round&&ti>0&&prevReturn>packFloor+0.5?'<br>🔁 出发由上一趟回店顺延（保温下限 '+min2hm(packFloor)+'，回店 '+min2hm(prevReturn)+'）；打包别早于 '+min2hm(packAt)+'，若 ETA 顶到窗尾请把末点挪走/跑腿':'')
         +(waited>0.5?'<br>⏸ 本趟含等送达窗口约 '+Math.round(waited)+' 分（不能早于窗口起点送达）：可把出发调晚减少空等':'')
-        +'<br>📏 计价全线 <b>'+kmOut.toFixed(1)+'km</b>（店→末点，回程不计价）｜用时约 <b>'+dur+'分</b>（上楼'+stopMin+'分）'+(back?'｜回店 '+min2hm(clock):'｜送完 '+min2hm(clock))
+        +'<br>📏 计价全线 <b>'+kmOut.toFixed(1)+'km</b>（店→末点，回程不计价）｜用时约 <b>'+dur+'分</b>（上楼'+stopMin+'分）'+(back?(homeBack?'｜<b>到家</b> ':'｜回店 '):'｜送完 ')+min2hm(clock)
         +'<br>💰 骑手班价：整趟一口价 <b>'+rp.p+'元</b>（'+tr.seg.length+'点×'+(kmOut<=3?'≤3':kmOut<=8?'4~8':kmOut<=13?'9~13':kmOut<=18?'14~18':'19~22')+'km 档'+(rp.cap?'，超表按顶档':'')+'）｜餐均 '+(rp.p/Math.max(1,meals)).toFixed(1)+'元｜闪送逐点合计 '+tripFlash+'元 → '+adv
         +'<br>📋 发骑手文案：'+tr.seg.length+' 个点、全线 '+kmOut.toFixed(1)+' 公里、约 '+dur+' 分钟、整趟 '+rp.p+' 元'
         +(dur>maxTrip?'<br><span class="bad">⚠️ 超单班上限（实测约'+dur+'分＞'+maxTrip+'分），孤点必送</span>':'')
         +(late?'<br><span class="bad">⚠️ 按实测距离这趟有晚点风险，建议提前出发或把末点挪给别的趟</span>':'')
         +'</div>');
     });
+    var homeHint='';
+    if(homeP&&planParams.round&&trips.length){var lt=trips[trips.length-1];var hd=km(groups[lt.seg[lt.seg.length-1]].pos,homeP);
+      homeHint='<br>🏠 末趟终点即'+escHtml(rider?rider.name:'骑手')+'家方向（'+escHtml(rider&&rider.home||'')+'），回程不空跑；末点离家 '+hd.toFixed(1)+'km'+(hd>2?'——有离家更近的点可调到本趟末尾':'，很顺');}
     var head='✅ <b>共 '+trips.length+' 趟</b>｜'+live.length+' 个有单点｜<b>'+totMeals+' 餐</b>｜全线 '+totKm.toFixed(1)+'km｜<b>跑腿班价合计 '+totRider+' 元</b>'
+      +(rider?'<br>👤 骑手：<b>'+escHtml(rider.name)+'</b>'+(rider.home?'（家：'+escHtml(rider.home)+'）':'')+(rider.speed?' · '+rider.speed+'km/h':'')+(rider.notes?' · 📝'+escHtml(rider.notes):''):'')
+      +homeHint
       +(flex>0?'<br><span class="mid">⏱ 已按时限弹性放宽：各点截止 <b>'+min2hm(winEndMin)+'+'+flex+' 分</b> 计算（可在上方「弹性±」调整，设 0 则严格卡窗口截止）</span>':'')
       +(oneTripHint||'')
       +(forceSoloWarn?'<br><span class="mid">⚠️ 时间窗约束下无法完全满足单班上限，已按「时限优先」排出（超限趟已标注）</span>':'')
-      +(planParams.round?'<br>🔁 顺序班模式：送完回店再出发下一趟（一人多趟）':'<br>🔀 并行班模式：各趟同时出发（多人各跑一条线）');
+      +(planParams.round?'<br>🔁 顺序班模式：送完回店再出发下一趟（一人多趟）'+(relaySched?'<br>🕐 <b>单人接力时刻表</b>：'+relaySched:''):'<br>🔀 并行班模式：各趟同时出发（多人各跑一条线）——<b>只有一名骑手？勾选「送完回店」改为单人接力</b>');
     pset(head
       +'<br>⚡ 闪送点对点参考合计 <b>'+totFlash+' 元</b>（餐均 '+(totFlash/Math.max(1,totMeals)).toFixed(1)+'元/餐；仅参考，不是向客户收的配送费）'
       +(warn?'<br>'+warn:'')

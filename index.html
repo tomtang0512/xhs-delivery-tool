@@ -82,7 +82,7 @@
 </head>
 <body>
 <div class="panel">
-  <h3>🥗 壮壮FIT 配送助手 <span id="verTag" style="font-size:11px;color:#999;font-weight:normal">v2.30</span></h3>
+  <h3>🥗 壮壮FIT 配送助手 <span id="verTag" style="font-size:11px;color:#999;font-weight:normal">v2.31</span></h3>
   <div class="tabs">
     <button class="tabbtn on" id="tab-plan" type="button">🛵 排线</button>
     <button class="tabbtn" id="tab-cust" type="button">👥 客户</button>
@@ -1148,28 +1148,47 @@ function riderPrice(pts,kmOut){
   var sessOK=function(k){var t=k.t||'';return sess==='all'||t===''||t==='b'||t===(sess==='lunch'?'l':'d');};
   var mainPts=[],excluded=[];
   var todayK=new Date().toDateString();
-  var oMeals={};
-  (window.__rptOrders||[]).forEach(function(o){ if(o.match&&o.match.i!=null)oMeals[o.match.i]=(oMeals[o.match.i]||0)+(o.meals||1); });
-  live.forEach(function(i){
-    var k=customers[i];
-    if(!sessOK(k)){excluded.push(k);return;}
-    var dlm=winEndMin+flex,ea=0;
-    if(k.dlM&&k.dlD===todayK){dlm=Math.min(dlm,k.dlM);ea=0;}   // v2.30 报单点只卡截止（组头窗尾/备注从严），不再设「最早可送达」——历史实测早到 66~85 分客户均接受，早到风险由 50 分保温纪律兜底
-    mainPts.push({k:k,dlm:dlm,m:oMeals[i]||k.meals||1,ea:ea,rep:(k.dlM&&k.dlD===todayK)?1:0});
-  });
+var oMeals={},oMealsS={},oDlmS={},oNamesS={},oHas={};   // v2.31 报单订单按「组头时段」分账：同一点位可能午晚各有报单（如烁屿前台3单分两波），本时段只吃本时段的截止与餐数
+(window.__rptOrders||[]).forEach(function(o){
+  if(!o.match||o.match.i==null)return;
+  var i2=o.match.i;
+  oMeals[i2]=(oMeals[i2]||0)+(o.meals||1);
+  oHas[i2]=1;
+  var st=o.groupT||(o.groupT=groupToT(o.group));
+  if(!st&&o.dlMin!=null)st=(o.dlMin>=hm2min('15:00'))?'d':'l';   // 组头无时刻字样时按截止 15:00 分界
+  if(!st)return;
+  var key=st+'@'+i2;
+  oMealsS[key]=(oMealsS[key]||0)+(o.meals||1);
+  if(o.user){var na=oNamesS[key]||(oNamesS[key]=[]);if(na.indexOf(o.user)<0)na.push(o.user);}
+  if(o.dlMin!=null&&(oDlmS[key]===undefined||o.dlMin<oDlmS[key]))oDlmS[key]=o.dlMin;
+});
+var sessKey=(sess==='lunch')?'l':(sess==='dinner')?'d':null;   // 「全部时段」不拆波，维持旧行为
+var excludedS=[];   // 今日有报单但都在另一时段：本时段不排（午/晚分窗跑是常态）
+live.forEach(function(i){
+var k=customers[i];
+if(!sessOK(k)){excluded.push(k);return;}
+var dlm=winEndMin+flex,ea=0,rep=(k.dlM&&k.dlD===todayK)?1:0,m=oMeals[i]||k.meals||1;
+if(sessKey&&oHas[i]){   // v2.31 午餐单不再拖死晚餐窗（截止/餐数按时段分开）；反向同理
+  var key=sessKey+'@'+i;
+  if(oMealsS[key]==null){excludedS.push(k);return;}
+  dlm=Math.min(dlm,oDlmS[key]);m=oMealsS[key];rep=1;
+}else if(rep){dlm=Math.min(dlm,k.dlM);}   // v2.30 报单点只卡截止（组头窗尾/备注从严），不再设「最早可送达」——历史实测早到 66~85 分客户均接受，早到风险由 50 分保温纪律兜底
+mainPts.push({k:k,dlm:dlm,m:m,ea:ea,rep:rep});
+});
   // 出发时间防呆：与时段/报单截止明显矛盾时自动修正（可手动改回）
-  var minDlRaw=1e9,maxDlRaw=0,depOrig=min2hm(departMin),depSnap='';
-  mainPts.forEach(function(mp){if(mp.k.dlM&&mp.k.dlD===todayK){if(mp.k.dlM<minDlRaw)minDlRaw=mp.k.dlM;if(mp.k.dlM>maxDlRaw)maxDlRaw=mp.k.dlM;}});
+var minDlRaw=1e9,depOrig=min2hm(departMin),depSnap='';
+mainPts.forEach(function(mp){if(mp.rep&&mp.dlm<minDlRaw)minDlRaw=mp.dlm;});   // v2.31 按本时段截止算，另一时段的单不再干扰出发防呆
   if(sess==='dinner'&&departMin<hm2min('16:00')){departMin=hm2min('16:55');depSnap='16:55';}
   if(sess==='lunch'&&departMin>hm2min('13:00')){departMin=hm2min('10:55');depSnap='10:55';}
   if(minDlRaw<1e9&&departMin<minDlRaw-50){departMin=minDlRaw-50;depSnap=min2hm(departMin);}   // v2.24 保温50分（升级保温版实测）：首趟打包=最早窗尾−50；各趟自己的打包下限由 tripDep 兑底
   if(depSnap){document.getElementById('pdepart').value=depSnap;planParams.depart=depSnap;}
   var depSnapNote=depSnap?('⏱ 出发时间从 <b>'+depOrig+'</b> 自动修正为 <b>'+depSnap+'</b>（与报单送达截止/时段矛盾，可在左上改回）'):'';
-  if(!mainPts.length){
-    var m0='本时段没有可排线的点。';
-    if(excluded.length) m0+='<br>· 时段不符（习惯时段）：'+excluded.map(function(k){return k.name+'（'+(TIME_MAP[k.t||'']||'不固定')+'）';}).join('、');
-    pset(m0); return;
-  }
+if(!mainPts.length){
+  var m0='本时段没有可排线的点。';
+  if(excluded.length) m0+='<br>· 时段不符（习惯时段）：'+excluded.map(function(k){return k.name+'（'+(TIME_MAP[k.t||'']||'不固定')+'）';}).join('、');
+  if(excludedS.length) m0+='<br>· 今日报单在另一时段：'+excludedS.map(function(k){return k.name;}).join('、')+'（午/晚分窗跑，正常）';
+  pset(m0); return;
+}
   // 2) 合并同一目的地：直线≤100m 同楼；送达按最高复杂度算一次、截止取最早（合并户截止相同，实际不变）
   var groups=[];
   mainPts.forEach(function(mp){
@@ -1180,18 +1199,35 @@ function riderPrice(pts,kmOut){
     else groups.push({pos:p,members:[mp.k],min:CX_MIN[mp.k.cx||'normal'],dlm:mp.dlm,meals:mp.m,ea:mp.ea,rep:mp.rep?1:0});
   });
   groups.forEach(function(g){if(g.ea>g.dlm)g.ea=0;});   // 同址不同截止冲突时放弃最早约束，保证可解
-  var glabel=function(g){return g.members.map(function(m){var rn=(window.__rptNames||{})[customers.indexOf(m)];return (rn&&rn.length)?rn.join('+'):m.name;}).join('+');};
+  var glabel=function(g){return g.members.map(function(m){var ci=customers.indexOf(m),rn=((sessKey&&oNamesS[sessKey+'@'+ci])||(window.__rptNames||{})[ci]);return (rn&&rn.length)?rn.join('+'):m.name;}).join('+');};   // v2.31 标签按本时段报单用户显示
   // 3) 时限过紧的点（出发+准备+直线骑行已超时限）剔除，单独提示最晚出发时间
-  var tight=[];
-  for(var r1=groups.length-1;r1>=0;r1--){
-    var g1=groups[r1], need=prep+ride(ORIGIN,g1.pos);
-    if(departMin+need>g1.dlm){tight.push({g:g1,latest:g1.dlm-need});groups.splice(r1,1);}
+  //    v2.31 若只需把出发提前 ≤15 分就能全保住，自动提前并提示（如 17:00 截止 vs 默认 16:55 出发的 1 分钟之差）
+  function tightPass(){
+    var list=[];
+    for(var r1=groups.length-1;r1>=0;r1--){
+      var g1=groups[r1], need=prep+ride(ORIGIN,g1.pos);
+      if(departMin+need>g1.dlm){list.push({g:g1,latest:g1.dlm-need});groups.splice(r1,1);}
+    }
+    return list;
+  }
+  var tight=tightPass();
+  if(tight.length){
+    var snapDep=1e9;
+    tight.forEach(function(w){if(w.latest<snapDep)snapDep=w.latest;});
+    if(snapDep>0&&snapDep>=departMin-15){
+      tight.forEach(function(w){groups.push(w.g);});
+      departMin=Math.floor(snapDep);depSnap=min2hm(departMin);
+      document.getElementById('pdepart').value=depSnap;planParams.depart=depSnap;
+      depSnapNote+=' <b>⏱ 出发已自动提前到 '+depSnap+'</b>（为保住时限紧的点，可手动改回）';
+      tight=tightPass();
+    }
   }
   var n=groups.length;
   var warn=depSnapNote;
   if(autoRelay)warn+='<br>🔁 检测到只有 1 名骑手，已自动按「送完回店（单人接力）」排线——并行班是多人方案';
   tight.forEach(function(w){warn+='<br>⚠️ <b>'+glabel(w.g)+'</b> 时限 '+min2hm(w.g.dlm)+' 来不及：需最晚 '+min2hm(w.latest)+' 出发——建议单独提前送/自送/与客户改约';});
   excluded.forEach(function(k){warn+='<br>· '+k.name+'：习惯时段为「'+(TIME_MAP[k.t||'']||'不固定')+'」，未纳入本次排线';});
+  excludedS.forEach(function(k){warn+='<br>· '+k.name+'：今日报单在另一时段（本时段无单），未纳入——午/晚分窗各跑一次';});
   if(!n){
     pset('❌ 可排线的点为 0（时限都太紧）。建议：把「出发」时间提前，或放宽「窗口截止」。<br>'+warn);
     return;
@@ -1302,6 +1338,20 @@ function riderPrice(pts,kmOut){
     var best=null;
     eachPerm(idxs.slice(),function(pm){var r=cutDP(pm,false);if(r&&(!best||dpBetter(r,best)))best=r;});
     if(!best){forceSolo=true;eachPerm(idxs.slice(),function(pm){var r=cutDP(pm,true);if(r&&(!best||dpBetter(r,best)))best=r;});}
+    dp=best;
+  }else if(planParams.round&&n>=9&&n<=10){
+    // v2.31 9~10 点：全排列按大巡游成本在线排名，只留前 3000 个候选再逐一最优切割（近似全局最优；9!=36万、10!=363万，排序阶段只算 tourCost）
+    var cands=[],gate=1e18,MK=3000;
+    eachPerm(idxs.slice(),function(pm){var c=tourCost(pm);
+      if(c>=gate)return;
+      var lo=0,hi=cands.length;while(lo<hi){var mid=(lo+hi)>>1;if(cands[mid].c<c)lo=mid+1;else hi=mid;}
+      cands.splice(lo,0,{pm:pm.slice(),c:c});
+      if(cands.length>MK){cands.length=MK;gate=cands[MK-1].c;}
+    });
+    if(tour&&tour.length===n){var tc2=tourCost(tour);if(cands.length<MK||tc2<gate)cands.push({pm:tour.slice(),c:tc2});}
+    var best=null;
+    cands.forEach(function(p){var r=cutDP(p.pm,false);if(r&&(!best||dpBetter(r,best)))best=r;});
+    if(!best){forceSolo=true;cands.forEach(function(p){var r=cutDP(p.pm,true);if(r&&(!best||dpBetter(r,best)))best=r;});}
     dp=best;
   }
   if(!dp){dp=cutDP(tour,false);if(!dp){dp=cutDP(tour,true);forceSolo=true;}}

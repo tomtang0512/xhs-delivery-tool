@@ -82,7 +82,7 @@
 </head>
 <body>
 <div class="panel">
-  <h3>🥗 壮壮FIT 配送助手 <span id="verTag" style="font-size:11px;color:#999;font-weight:normal">v2.29</span></h3>
+  <h3>🥗 壮壮FIT 配送助手 <span id="verTag" style="font-size:11px;color:#999;font-weight:normal">v2.30</span></h3>
   <div class="tabs">
     <button class="tabbtn on" id="tab-plan" type="button">🛵 排线</button>
     <button class="tabbtn" id="tab-cust" type="button">👥 客户</button>
@@ -1130,6 +1130,8 @@ if(!live.length){ pset('<span class="mid">今天还没有有单地址。正常�
   var departMin = planParams.depart ? hm2min(planParams.depart) : (sess==='dinner'?hm2min('16:55'):hm2min('10:55'));
   var winEndMin = planParams.winEnd ? hm2min(planParams.winEnd) : (sess==='dinner'?hm2min('18:30'):hm2min('12:30'));
   var prep=+planParams.prep||0, speed=+planParams.speed||20, maxTrip=+planParams.maxTrip||55;
+  var autoRelay=false;   // v2.30 单骑手自动切单人接力：并行班是多人方案，一个人跑不了
+  try{if(riders&&riders.length<=1&&!planParams.round){planParams.round=true;autoRelay=true;var _pr=document.getElementById('pround');if(_pr)_pr.checked=true;}}catch(e){}
   var flex=(planParams.flex!==undefined && planParams.flex!==null)?+planParams.flex||0:30;
   var ride=function(a,b){return km(a,b)*ROAD_K/speed*60;};
   // v2.27 骑手档案：末趟终点尽量近家（回程=下班路，不空跑）
@@ -1152,7 +1154,7 @@ function riderPrice(pts,kmOut){
     var k=customers[i];
     if(!sessOK(k)){excluded.push(k);return;}
     var dlm=winEndMin+flex,ea=0;
-    if(k.dlM&&k.dlD===todayK){dlm=Math.min(dlm,k.dlM);ea=(k.wsM!=null&&k.dlD===todayK)?Math.max(0,k.wsM):Math.max(0,k.dlM-45);}   // v2.22 报单窗口区间 [起点,窗尾]：起点=最早可送达，窗尾=硬时限；旧「X点前」折算 [X-45,X]
+    if(k.dlM&&k.dlD===todayK){dlm=Math.min(dlm,k.dlM);ea=0;}   // v2.30 报单点只卡截止（组头窗尾/备注从严），不再设「最早可送达」——历史实测早到 66~85 分客户均接受，早到风险由 50 分保温纪律兜底
     mainPts.push({k:k,dlm:dlm,m:oMeals[i]||k.meals||1,ea:ea,rep:(k.dlM&&k.dlD===todayK)?1:0});
   });
   // 出发时间防呆：与时段/报单截止明显矛盾时自动修正（可手动改回）
@@ -1187,6 +1189,7 @@ function riderPrice(pts,kmOut){
   }
   var n=groups.length;
   var warn=depSnapNote;
+  if(autoRelay)warn+='<br>🔁 检测到只有 1 名骑手，已自动按「送完回店（单人接力）」排线——并行班是多人方案';
   tight.forEach(function(w){warn+='<br>⚠️ <b>'+glabel(w.g)+'</b> 时限 '+min2hm(w.g.dlm)+' 来不及：需最晚 '+min2hm(w.latest)+' 出发——建议单独提前送/自送/与客户改约';});
   excluded.forEach(function(k){warn+='<br>· '+k.name+'：习惯时段为「'+(TIME_MAP[k.t||'']||'不固定')+'」，未纳入本次排线';});
   if(!n){
@@ -1241,16 +1244,28 @@ function riderPrice(pts,kmOut){
     if(planParams.round&&ord.length){var tr=ride(cur,ORIGIN);dur+=tr;kmAcc+=tr*speed/60;finish+=tr;}
     return {ok:ok,dur:dur,km:kmAcc,arr:arr,finish:finish};
   }
-  // 5.5) v2.24 每趟打包下限：max(踩窗口起点反推, 趟内最晚窗尾−50分保温)。各窗各自打包（早窗趟 10:55/晚窗趟 11:40），接力班自然衔接
+  // 5.5) v2.30 打包下限改按「预计送达」：打包到吃＝送达时刻−打包 ≤ 50 分（等窗时间计入送达）。
+  //      不再按窗尾一刀切——早死线点（如 11:30 前）只要线够短就能和晚窗点同趟；线太长（打包到吃超 50）照样拆趟。
   function repE(seg){var e=0;for(var q=0;q<seg.length;q++){var g=groups[seg[q]];if(g.rep&&g.dlm>e)e=g.dlm;}return e;}
+  var _tdCache={};
   function tripDep(seg,base){
-    var d=noWaitDep({seg:seg},base),e=repE(seg);
-    if(e&&e-50>d){var d2=e-50;if(segInfo(seg,d2).ok)return d2;return null;}   // 保温下限与本趟窗口时限冲突 → 该趟不可行，DP 会拆成各窗一趟
-    return d;
+    var key=seg.join('.')+'@'+base;if(_tdCache[key]!==undefined)return _tdCache[key];
+    var d=noWaitDep({seg:seg},base),e=0,q,g,res=null;
+    for(q=0;q<seg.length;q++){g=groups[seg[q]];if(g.ea>e)e=g.ea;}
+    if(e&&e-50>d)d=e-50;   // 有「最早可送达」的点：送达=窗口起点 → 打包 ≥ 窗口起点−50
+    for(var it=0;it<8;it++){
+      var info=segInfo(seg,d);
+      if(!info.ok)break;   // 时限不可行；再推迟只会更晚，直接判负
+      var mx=0;
+      for(q=0;q<info.arr.length;q++){var sl=info.arr[q]-d;if(sl>mx)mx=sl;}
+      if(mx<=50+1e-9){res=d;break;}
+      d=d+(mx-50);   // 保温不够 → 整体推迟打包再验（等窗变少，收敛）；推过头会撞时限 → 上一行拦下
+    }
+    _tdCache[key]=res;return res;
   }
   // 6) 最优切割 DP：先最少「超限分钟」，再最少趟数，再总时长最短；并行班每趟同刻出发，顺序班接力出发
   //    （超限分钟 = 各趟 max(0,用时-单班上限) 之和：远点孤点必送时，优先让大簇自成一趟≤上限，而不是全簇陪远点绕路）
-  function cutDP(forceSolo){
+  function cutDP(tourArr,forceSolo){
     var INF=1e9;
     var f=[{v:0,t:0,end:departMin,d:0,h:0}],cut=[-1];
     function better(c,b){if(c.v!==b.v)return c.v<b.v;if(c.t!==b.t)return c.t<b.t;
@@ -1260,7 +1275,7 @@ function riderPrice(pts,kmOut){
       f[i]={v:INF,t:INF,end:INF,d:INF,h:INF};
       for(var j=0;j<i;j++){
         if(f[j].t>=INF)continue;
-        var seg=tour.slice(j,i);
+        var seg=tourArr.slice(j,i);
         var dep=tripDep(seg,planParams.round?f[j].end:departMin);   // v2.24 趟内打包时刻按本趟窗口倒推；null=保温与窗口冲突，拆
         if(dep===null)continue;
         if(planParams.round&&dep<f[j].end)dep=f[j].end;   // v2.26 单人接力：骑手回店前不能出发；晚打包无碍保温（打包≥窗尾−50即可）
@@ -1268,18 +1283,33 @@ function riderPrice(pts,kmOut){
         var okk=info.ok&&(info.dur<=maxTrip||forceSolo);   // 兜底：时限可行的趟即使超单班上限也放行
         if(!okk)continue;
         var cand={v:f[j].v+Math.max(0,info.dur-maxTrip),t:f[j].t+1,end:info.finish,d:f[j].d+info.dur,
-          h:(f[j].h||0)+((i===n&&homeP)?km(groups[tour[i-1]].pos,homeP):0)};   // v2.27 仅末趟计「末点离家距离」
+          h:(f[j].h||0)+((i===n&&homeP)?km(groups[tourArr[i-1]].pos,homeP):0)};   // v2.27 仅末趟计「末点离家距离」
         if(better(cand,f[i])){f[i]=cand;cut[i]=j;}
       }
     }
-    return f[n].t>=INF?null:{f:f,cut:cut};
+    return f[n].t>=INF?null:{f:f,cut:cut,tour:tourArr};
   }
-  var dp=cutDP(false),forceSolo=false;
-  if(!dp){dp=cutDP(true);forceSolo=true;}
+  var dp=null,forceSolo=false;
+  function dpBetter(a,b){   // v2.30 跨顺序比较：超限分 → 趟数 → 收工时刻/总时长 → 末趟离家
+    var fa=a.f[n],fb=b.f[n];
+    if(fa.v!==fb.v)return fa.v<fb.v;
+    if(fa.t!==fb.t)return fa.t<fb.t;
+    var e1=planParams.round?fa.end:fa.d,e2=planParams.round?fb.end:fb.d;
+    if(e1!==e2)return e1<e2;return fa.h<fb.h;
+  }
+  if(planParams.round&&n>=2&&n<=8){
+    // v2.30 单人接力：枚举全部配送顺序×最优切割（≤8 点算得动），不再固定大巡游只做连续切割
+    var best=null;
+    eachPerm(idxs.slice(),function(pm){var r=cutDP(pm,false);if(r&&(!best||dpBetter(r,best)))best=r;});
+    if(!best){forceSolo=true;eachPerm(idxs.slice(),function(pm){var r=cutDP(pm,true);if(r&&(!best||dpBetter(r,best)))best=r;});}
+    dp=best;
+  }
+  if(!dp){dp=cutDP(tour,false);if(!dp){dp=cutDP(tour,true);forceSolo=true;}}
   if(!dp){pset('❌ 约束太紧拆不出线：请放宽「单班上限」、把「出发」提前或放宽「窗口截止」。<br>'+warn);return;}
   var forceSoloWarn=forceSolo;
+  var planTour=dp.tour||tour;   // v2.30 获胜的配送顺序（接力枚举时可能≠大巡游）
   var trips=[],i3=n;
-  while(i3>0){var j3=dp.cut[i3];trips.push({seg:tour.slice(j3,i3)});i3=j3;}
+  while(i3>0){var j3=dp.cut[i3];trips.push({seg:planTour.slice(j3,i3)});i3=j3;}
   trips.reverse();
   // 7.5) 趟出发时间自动推导：按趟内各点窗口起点反推不空等的出发，再与「保温下限」取更晚；不破坏任何时限才采用
   function noWaitDep(tr,base){
@@ -1356,14 +1386,14 @@ function riderPrice(pts,kmOut){
   });
   // 8.5) 一趟可行性说明：若全部点串成一趟时限可行但超「单班上限」，或早出发即可赶上时限，给出明确提示
   var oneTripHint='';
-  if(trips.length>1&&tour.length){
-    var infoAll=segInfo(tour,departMin);
+  if(trips.length>1&&planTour.length){
+    var infoAll=segInfo(planTour,departMin);
     var durAll=Math.round(infoAll.dur);
     if(infoAll.ok){
       if(durAll>maxTrip&&durAll<=maxTrip*1.5) oneTripHint='<br>💡 <b>已排线的点其实可 1 趟跑完</b>（全程约 '+durAll+' 分，各点时限都赶得上），只是超了「单班上限」'+maxTrip+' 分才拆线——把「单班上限」调到 ≥'+durAll+' 即可 1 趟';
     }else{
       var lateBy=0;
-      infoAll.arr.forEach(function(a,q){ lateBy=Math.max(lateBy,a-groups[tour[q]].dlm); });
+      infoAll.arr.forEach(function(a,q){ lateBy=Math.max(lateBy,a-groups[planTour[q]].dlm); });
       if(lateBy>0){
         var d0=Math.ceil(departMin-lateBy-1);
         if(departMin-d0<=90) oneTripHint='<br>💡 <b>想 1 趟跑完？</b>全程约 '+durAll+' 分，最晚 <b>'+min2hm(d0)+'</b> 出发可全部赶上时限（现在 '+min2hm(departMin)+' 出发，来不及才拆线）';
@@ -1400,9 +1430,9 @@ function riderPrice(pts,kmOut){
     var relaySched='';
     trips.forEach(function(tr,ti){
       var prevReturn=prevFinish;   // 上一趟实测回店（循环末尾才更新 prevFinish，卡片渲染前先存）
-      var packFloor=repE(tr.seg)?repE(tr.seg)-50:0;   // 本趟保温下限（打包不早于窗尾−50）
-      if(planParams.round&&ti>0)tr.dep=Math.max(prevReturn,tr.dep0||tr.dep);   // v2.26 出发=max(上一趟回店, 本趟打包下限/踩窗反推)，不早于保温下限
-      var packAt=Math.max(packFloor,tr.dep);
+      var packFloor=tr.dep0||tr.dep;   // v2.30 本趟最早可出发（踩窗/保温已折进 tripDep）
+      if(planParams.round&&ti>0)tr.dep=Math.max(prevReturn,tr.dep0||tr.dep);   // v2.26 出发=max(上一趟回店, 本趟最早可出发)
+      var packAt=tr.dep;   // v2.30 打包=出发（保温已按预计送达校验）
       var seq=[ORIGIN].concat(tr.seg.map(function(gi){return groups[gi].pos;}));
       var back=planParams.round&&tr.seg.length;
       var kmAcc=0,etas=[],clock=tr.dep+prep,stopMin=0,late=false,slack=1e9,waited=0;
@@ -1446,7 +1476,7 @@ function riderPrice(pts,kmOut){
       blocks.push('<div style="margin:8px 0;padding:8px 10px;border:1px solid '+col+';border-left:5px solid '+col+';border-radius:8px;background:#fff">'
         +'<b style="color:'+col+'">🛵 第'+(ti+1)+'趟</b>（'+tr.seg.length+'点'+meals+'餐）：出餐点 → '+names.join(' → ')
         +'<br>⏱ 打包 <b>'+min2hm(packAt)+'</b>｜出发 <b>'+min2hm(tr.dep)+'</b>｜最晚 '+min2hm(tr.latest)+' 出发｜ETA：'+etas.map(function(e2){return glabel(groups[e2.gi])+' '+min2hm(e2.t);}).join('、')
-        +(planParams.round&&ti>0&&prevReturn>packFloor+0.5?'<br>🔁 出发由上一趟回店顺延（保温下限 '+min2hm(packFloor)+'，回店 '+min2hm(prevReturn)+'）；打包别早于 '+min2hm(packAt)+'，若 ETA 顶到窗尾请把末点挪走/跑腿':'')
+        +(planParams.round&&ti>0&&prevReturn>packFloor+0.5?'<br>🔁 出发由上一趟回店顺延（本趟最早可出发 '+min2hm(packFloor)+'，上一趟回店 '+min2hm(prevReturn)+'）；若 ETA 顶到截止请把末点挪走/跑腿':'')
         +(waited>0.5?'<br>⏸ 本趟含等送达窗口约 '+Math.round(waited)+' 分（不能早于窗口起点送达）：可把出发调晚减少空等':'')
         +'<br>📏 计价全线 <b>'+kmOut.toFixed(1)+'km</b>（店→末点，回程不计价）｜用时约 <b>'+dur+'分</b>（上楼'+stopMin+'分）'+(back?(homeBack?'｜<b>到家</b> ':'｜回店 '):'｜送完 ')+min2hm(clock)
         +'<br>💰 骑手班价：整趟一口价 <b>'+rp.p+'元</b>（'+tr.seg.length+'点×'+(kmOut<=3?'≤3':kmOut<=8?'4~8':kmOut<=13?'9~13':kmOut<=18?'14~18':'19~22')+'km 档'+(rp.cap?'，超表按顶档':'')+'）｜餐均 '+(rp.p/Math.max(1,meals)).toFixed(1)+'元｜闪送逐点合计 '+tripFlash+'元 → '+adv
@@ -1461,7 +1491,7 @@ function riderPrice(pts,kmOut){
     var head='✅ <b>共 '+trips.length+' 趟</b>｜'+live.length+' 个有单点｜<b>'+totMeals+' 餐</b>｜全线 '+totKm.toFixed(1)+'km｜<b>跑腿班价合计 '+totRider+' 元</b>'
       +(rider?'<br>👤 骑手：<b>'+escHtml(rider.name)+'</b>'+(rider.home?'（家：'+escHtml(rider.home)+'）':'')+(rider.speed?' · '+rider.speed+'km/h':'')+(rider.notes?' · 📝'+escHtml(rider.notes):''):'')
       +homeHint
-      +(flex>0?'<br><span class="mid">⏱ 已按时限弹性放宽：各点截止 <b>'+min2hm(winEndMin)+'+'+flex+' 分</b> 计算（可在上方「弹性±」调整，设 0 则严格卡窗口截止）</span>':'')
+      +(flex>0?'<br><span class="mid">⏱ 弹性 ±'+flex+' 分仅对库里无报单窗口的老点位生效（截止按 '+min2hm(winEndMin)+'+'+flex+' 算）；报单点的组头窗尾与备注截止是硬时限，不受弹性影响</span>':'')
       +(oneTripHint||'')
       +(forceSoloWarn?'<br><span class="mid">⚠️ 时间窗约束下无法完全满足单班上限，已按「时限优先」排出（超限趟已标注）</span>':'')
       +(planParams.round?'<br>🔁 顺序班模式：送完回店再出发下一趟（一人多趟）'+(relaySched?'<br>🕐 <b>单人接力时刻表</b>：'+relaySched:''):'<br>🔀 并行班模式：各趟同时出发（多人各跑一条线）——<b>只有一名骑手？勾选「送完回店」改为单人接力</b>');

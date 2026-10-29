@@ -66,7 +66,7 @@
   .tabbtn.on{background:#e91e63;border-color:#e91e63;color:#fff}
   .tabpane{padding-top:6px}
 /* ===== 周报看板 ===== */
-.wk-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px}
+.wk-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-bottom:12px}
 .wk-kpi{background:#fff;border-radius:12px;padding:14px 12px;box-shadow:0 1px 4px rgba(31,45,40,.08);position:relative;overflow:hidden}
 .wk-kpi::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:#2e9e6b}
 .wk-kpi.warn::before{background:#e6a23c}
@@ -75,13 +75,20 @@
 .wk-kpi .v small{font-size:12px;font-weight:400;color:#8a968f;margin-left:2px}
 .wk-kpi .d{font-size:10.5px;margin-top:6px;color:#2e9e6b}
 .wk-kpi.warn .d{color:#b08030}
-.wk-grid{display:grid;grid-template-columns:1fr 1.5fr;gap:10px}
-@media(max-width:860px){.wk-grid{grid-template-columns:1fr}.wk-kpis{grid-template-columns:repeat(2,1fr)}}
+.wk-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px}
 .wk-card{background:#fff;border-radius:12px;padding:14px 16px;box-shadow:0 1px 4px rgba(31,45,40,.08)}
 .wk-card h3{font-size:14px;margin:0 0 2px}
 .wk-desc{font-size:11px;color:#8a968f;margin-bottom:6px}
 .wk-chart{width:100%;height:300px}
 .wk-foot{font-size:10.5px;color:#aab5ae;text-align:center;margin-top:12px}
+/* 周报下拉抽屉 */
+details.wk-drop>summary{list-style:none;cursor:pointer;background:#fff;border-radius:12px;padding:13px 16px;box-shadow:0 1px 4px rgba(31,45,40,.08);display:flex;align-items:center;gap:8px;font-weight:700;font-size:14px;color:#2b3a33;user-select:none}
+details.wk-drop>summary::-webkit-details-marker{display:none}
+details.wk-drop>summary .wk-sumhint{font-size:10.5px;font-weight:400;color:#aab5ae}
+details.wk-drop>summary .arr{margin-left:auto;color:#2e9e6b;font-size:12px;transition:transform .2s}
+details.wk-drop[open]>summary .arr{transform:rotate(180deg)}
+details.wk-drop[open]>summary{border-radius:12px 12px 4px 4px}
+.wk-body{padding-top:10px}
   .pstat{font-size:12px;color:#888;margin:4px 0;line-height:1.6}
   .helplist{font-size:12px;color:#666;line-height:2.1}
   @media (max-width:640px){
@@ -218,12 +225,17 @@
     </div>
   </div>
   <div class="tabpane" id="pane-week" style="display:none">
-    <div class="wk-kpis" id="wk-kpis"></div>
-    <div class="wk-grid">
-      <div class="wk-card"><h3>配送成本结构</h3><div class="wk-desc" id="wk-costdesc"></div><div id="wk-cost" class="wk-chart"></div></div>
-      <div class="wk-card"><h3>每日单量与配送费</h3><div class="wk-desc" id="wk-dailydesc"></div><div id="wk-daily" class="wk-chart"></div></div>
-    </div>
-    <div class="wk-foot" id="wk-foot"></div>
+    <details class="wk-drop" id="wk-details" open>
+      <summary>📊 本周配送周报 <span id="wk-range"></span><span class="wk-sumhint">点击展开 / 收起</span><span class="arr">▾</span></summary>
+      <div class="wk-body">
+        <div class="wk-kpis" id="wk-kpis"></div>
+        <div class="wk-grid">
+          <div class="wk-card"><h3>配送成本结构</h3><div class="wk-desc" id="wk-costdesc"></div><div id="wk-cost" class="wk-chart"></div></div>
+          <div class="wk-card"><h3>每日单量与配送费</h3><div class="wk-desc" id="wk-dailydesc"></div><div id="wk-daily" class="wk-chart"></div></div>
+        </div>
+        <div class="wk-foot" id="wk-foot"></div>
+      </div>
+    </details>
   </div>
 </div>
 <div id="map"></div>
@@ -1132,6 +1144,7 @@ function wkLoadEcharts(cb){
   document.head.appendChild(s);
 }
 function wkRender(){
+  document.getElementById('wk-range').textContent='（'+WK.range+'）';
   document.getElementById('wk-kpis').innerHTML=WK.kpis.map(function(k){
     return '<div class="wk-kpi'+(k.warn?' warn':'')+'"><div class="l">'+k.label+'</div><div class="v">'+k.value+'<small>'+k.unit+'</small></div><div class="d">'+k.delta+'</div></div>';
   }).join('');
@@ -1176,6 +1189,9 @@ function wkRender(){
 document.getElementById('tab-week').addEventListener('click',function(){
   if(!window.__wkInit){window.__wkInit=true;wkLoadEcharts(wkRender);}
   else if(window.__wkCharts){window.__wkCharts.forEach(function(c){c.resize();});}
+});
+document.getElementById('wk-details').addEventListener('toggle',function(){
+  if(this.open&&window.__wkCharts){setTimeout(function(){window.__wkCharts.forEach(function(c){c.resize();});},60);}
 });
 window.addEventListener('resize',function(){(window.__wkCharts||[]).forEach(function(c){c.resize();});});
 document.getElementById('psession').addEventListener('change',function(){

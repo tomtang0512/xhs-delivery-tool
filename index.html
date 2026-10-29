@@ -65,6 +65,23 @@
   .tabbtn{flex:1;padding:8px 2px;border:1px solid #e3e6ea;background:#f5f6f8;border-radius:8px;cursor:pointer;font-size:13px;color:#667;font-weight:600;font-family:inherit}
   .tabbtn.on{background:#e91e63;border-color:#e91e63;color:#fff}
   .tabpane{padding-top:6px}
+/* ===== 周报看板 ===== */
+.wk-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px}
+.wk-kpi{background:#fff;border-radius:12px;padding:14px 12px;box-shadow:0 1px 4px rgba(31,45,40,.08);position:relative;overflow:hidden}
+.wk-kpi::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:#2e9e6b}
+.wk-kpi.warn::before{background:#e6a23c}
+.wk-kpi .l{font-size:11px;color:#8a968f;margin-bottom:6px}
+.wk-kpi .v{font-size:22px;font-weight:700;line-height:1.1}
+.wk-kpi .v small{font-size:12px;font-weight:400;color:#8a968f;margin-left:2px}
+.wk-kpi .d{font-size:10.5px;margin-top:6px;color:#2e9e6b}
+.wk-kpi.warn .d{color:#b08030}
+.wk-grid{display:grid;grid-template-columns:1fr 1.5fr;gap:10px}
+@media(max-width:860px){.wk-grid{grid-template-columns:1fr}.wk-kpis{grid-template-columns:repeat(2,1fr)}}
+.wk-card{background:#fff;border-radius:12px;padding:14px 16px;box-shadow:0 1px 4px rgba(31,45,40,.08)}
+.wk-card h3{font-size:14px;margin:0 0 2px}
+.wk-desc{font-size:11px;color:#8a968f;margin-bottom:6px}
+.wk-chart{width:100%;height:300px}
+.wk-foot{font-size:10.5px;color:#aab5ae;text-align:center;margin-top:12px}
   .pstat{font-size:12px;color:#888;margin:4px 0;line-height:1.6}
   .helplist{font-size:12px;color:#666;line-height:2.1}
   @media (max-width:640px){
@@ -82,12 +99,13 @@
 </head>
 <body>
 <div class="panel">
-  <h3>🥗 壮壮FIT 配送助手 <span id="verTag" style="font-size:11px;color:#999;font-weight:normal">v2.31b</span></h3>
+  <h3>🥗 壮壮FIT 配送助手 <span id="verTag" style="font-size:11px;color:#999;font-weight:normal">v2.32</span></h3>
   <div class="tabs">
     <button class="tabbtn on" id="tab-plan" type="button">🛵 排线</button>
     <button class="tabbtn" id="tab-cust" type="button">👥 客户</button>
     <button class="tabbtn" id="tab-judge" type="button">📏 接单判断</button>
     <button class="tabbtn" id="tab-help" type="button">📖 说明</button>
+<button class="tabbtn" id="tab-week" type="button">📊 周报</button>
   </div>
 <div class="tabpane" id="pane-plan">
 <div class="pstat">今日有单 <b id="pnum">0</b> 个点｜要改有单名单，<a href="javascript:void(0)" id="goCust" style="color:#e91e63">去客户页 →</a></div>
@@ -198,6 +216,14 @@
       ⏱ 「弹性±」（默认30分）：窗口截止往后放宽的分钟数，对应与客户约定的迟到容忍度；设 0 则严格卡窗口截止<br>
       🏋️ 健身房4店（乐刻/青度/烁屿/荟创）已并入客户档案，与散单统一排线
     </div>
+  </div>
+  <div class="tabpane" id="pane-week" style="display:none">
+    <div class="wk-kpis" id="wk-kpis"></div>
+    <div class="wk-grid">
+      <div class="wk-card"><h3>配送成本结构</h3><div class="wk-desc" id="wk-costdesc"></div><div id="wk-cost" class="wk-chart"></div></div>
+      <div class="wk-card"><h3>每日单量与配送费</h3><div class="wk-desc" id="wk-dailydesc"></div><div id="wk-daily" class="wk-chart"></div></div>
+    </div>
+    <div class="wk-foot" id="wk-foot"></div>
   </div>
 </div>
 <div id="map"></div>
@@ -1064,7 +1090,7 @@ document.getElementById('prider').addEventListener('change',function(){var v=thi
 });
 renderRiderSel();applyRiderSpeed();ensureRiderPos();
 // 选项卡切换：排线/客户/接单判断/说明
-var TABS=['plan','cust','judge','help'];
+var TABS=['plan','cust','judge','help','week'];
 function showTab(id){
   TABS.forEach(function(t){
     document.getElementById('pane-'+t).style.display=(t===id)?'':'none';
@@ -1073,6 +1099,85 @@ function showTab(id){
 }
 TABS.forEach(function(t){document.getElementById('tab-'+t).addEventListener('click',function(){showTab(t);});});
 document.getElementById('goCust').addEventListener('click',function(){showTab('cust');});
+// ===== 周报看板（懒加载 ECharts；每周只改 WK 对象里的数据）=====
+var WK={
+  range:'10.22 – 10.28',
+  kpis:[
+    {label:'域外餐均配送费',value:'7.5',unit:'元/餐',delta:'WoW +0.2 元',warn:false},
+    {label:'集约配送餐均',value:'6.2',unit:'元/餐',delta:'WoW +1.0 元',warn:false},
+    {label:'集约趟覆盖（师傅）',value:'≈60',unit:'%',delta:'58/96 餐 · 王谌郭三师傅',warn:false},
+    {label:'履约异常',value:'1',unit:'起2餐',delta:'周三银泰城2餐晚到，已处理 · 0 客诉',warn:true}
+  ],
+  costDesc:'第三方 34 单占周成本 49.3%，餐均 10.5 元（WoW ↓1.5 元）',
+  dailyDesc:'全周 96 单 720.5 元；黄=第三方散单，绿=集约（师傅+自配）',
+  foot:'数据源：10.22-10.28 履约（去重，已刨试吃餐）',
+  days:['10.22','10.23','10.24','10.25','10.26','10.27','10.28'],
+  orders:[24,21,3,1,16,18,13],          // 每日总单量
+  tp:[8,8,3,1,3,10,1],                  // 每日第三方单量
+  fees:[190.7,143.5,43.5,7.2,102.0,139.8,93.8],  // 每日配送费
+  cost:[                                // 成本结构（元）
+    {name:'王师傅 45单',v:270,c:'#2e9e6b'},
+    {name:'第三方 34单',v:355.5,c:'#e6a23c'},
+    {name:'谌师傅 7单',v:50,c:'#4a9d8e'},
+    {name:'郭师傅 6单',v:45,c:'#8fd4b4'},
+    {name:'自配 4单(0元)',v:0.001,c:'#c8d6cf'}
+  ]
+};
+function wkLoadEcharts(cb){
+  if(window.echarts)return cb();
+  var s=document.createElement('script');
+  s.src='https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js';
+  s.onload=cb;
+  s.onerror=function(){document.getElementById('wk-kpis').innerHTML='<div style="color:#c66;font-size:13px">📊 图表库加载失败，请检查网络后刷新重试</div>';};
+  document.head.appendChild(s);
+}
+function wkRender(){
+  document.getElementById('wk-kpis').innerHTML=WK.kpis.map(function(k){
+    return '<div class="wk-kpi'+(k.warn?' warn':'')+'"><div class="l">'+k.label+'</div><div class="v">'+k.value+'<small>'+k.unit+'</small></div><div class="d">'+k.delta+'</div></div>';
+  }).join('');
+  document.getElementById('wk-costdesc').textContent=WK.costDesc;
+  document.getElementById('wk-dailydesc').textContent=WK.dailyDesc;
+  document.getElementById('wk-foot').textContent=WK.foot;
+  var cons=WK.orders.map(function(v,i){return v-WK.tp[i];});
+  var c1=echarts.init(document.getElementById('wk-cost'));
+  c1.setOption({
+    tooltip:{trigger:'item',formatter:'{b}<br/>{c} 元（{d}%）'},
+    legend:{bottom:0,textStyle:{color:'#8a968f',fontSize:11},itemWidth:12,itemHeight:12},
+    series:[{type:'pie',radius:['42%','66%'],center:['50%','44%'],
+      data:WK.cost.map(function(x){return {name:x.name,value:x.v,itemStyle:{color:x.c}};}),
+      label:{formatter:'{d}%',color:'#41544c',fontSize:11},
+      itemStyle:{borderColor:'#fff',borderWidth:2}}]
+  });
+  var c2=echarts.init(document.getElementById('wk-daily'));
+  c2.setOption({
+    tooltip:{trigger:'axis',formatter:function(ps){
+      var i=WK.days.indexOf(ps[0].axisValue),s=ps[0].axisValue+'：总 '+WK.orders[i]+' 单<br/>';
+      ps.forEach(function(p){if(p.seriesName!=='合计')s+=p.marker+p.seriesName+'：'+p.value+(p.seriesName==='配送费(元)'?' 元':' 单')+'<br/>';});
+      return s;
+    }},
+    legend:{data:['集约单量','第三方单量','配送费(元)'],top:0,right:0,textStyle:{color:'#8a968f',fontSize:12}},
+    grid:{left:40,right:52,top:34,bottom:26},
+    xAxis:{type:'category',data:WK.days,axisLabel:{color:'#8a968f'},axisLine:{lineStyle:{color:'#dfe5e2'}}},
+    yAxis:[
+      {type:'value',name:'单',nameTextStyle:{color:'#8a968f'},axisLabel:{color:'#8a968f'},splitLine:{lineStyle:{color:'#eef2f0'}}},
+      {type:'value',name:'元',nameTextStyle:{color:'#8a968f'},axisLabel:{color:'#8a968f'},splitLine:{show:false}}
+    ],
+    series:[
+      {name:'集约单量',type:'bar',stack:'t',data:cons,barWidth:26,itemStyle:{color:'#2e9e6b'}},
+      {name:'第三方单量',type:'bar',stack:'t',data:WK.tp,barWidth:26,itemStyle:{color:'#f2c94c'},
+       label:{show:true,position:'inside',formatter:function(p){return p.value>0?p.value:'';},color:'#7a5c00',fontSize:11,fontWeight:600}},
+      {name:'合计',type:'bar',stack:'t',data:WK.orders.map(function(){return 0;}),itemStyle:{color:'rgba(0,0,0,0)'},
+       label:{show:true,position:'top',formatter:function(p){return WK.orders[p.dataIndex];},color:'#1d7a4f',fontSize:11},silent:true},
+      {name:'配送费(元)',type:'line',yAxisIndex:1,data:WK.fees,smooth:true,symbol:'circle',symbolSize:8,lineStyle:{color:'#e6a23c',width:2.5},itemStyle:{color:'#e6a23c'},z:5}
+    ]
+  });
+  window.__wkCharts=[c1,c2];
+}
+document.getElementById('tab-week').addEventListener('click',function(){
+  if(!window.__wkInit){window.__wkInit=true;wkLoadEcharts(wkRender);}
+  else if(window.__wkCharts){window.__wkCharts.forEach(function(c){c.resize();});}
+});
+window.addEventListener('resize',function(){(window.__wkCharts||[]).forEach(function(c){c.resize();});});
 document.getElementById('psession').addEventListener('change',function(){
   var v=this.value;
   document.getElementById('pwinend').value = v==='dinner' ? '18:30' : '12:30';

@@ -82,7 +82,7 @@
 </head>
 <body>
 <div class="panel">
-  <h3>🥗 壮壮FIT 配送助手 <span id="verTag" style="font-size:11px;color:#999;font-weight:normal">v2.31</span></h3>
+  <h3>🥗 壮壮FIT 配送助手 <span id="verTag" style="font-size:11px;color:#999;font-weight:normal">v2.31b</span></h3>
   <div class="tabs">
     <button class="tabbtn on" id="tab-plan" type="button">🛵 排线</button>
     <button class="tabbtn" id="tab-cust" type="button">👥 客户</button>
@@ -1166,11 +1166,12 @@ var sessKey=(sess==='lunch')?'l':(sess==='dinner')?'d':null;   // 「全部时�
 var excludedS=[];   // 今日有报单但都在另一时段：本时段不排（午/晚分窗跑是常态）
 live.forEach(function(i){
 var k=customers[i];
-if(!sessOK(k)){excluded.push(k);return;}
+var hasThisSess=(sessKey&&oHas[i]&&oMealsS[sessKey+'@'+i]!=null);   // v2.31b 本时段有报单的客户，习惯时段过滤不生效
+if(sessKey&&oHas[i]&&!hasThisSess){excludedS.push(k);return;}   // 今日有报单但都在另一时段：提示口径优先于习惯提示
+if(!hasThisSess&&!sessOK(k)){excluded.push(k);return;}
 var dlm=winEndMin+flex,ea=0,rep=(k.dlM&&k.dlD===todayK)?1:0,m=oMeals[i]||k.meals||1;
-if(sessKey&&oHas[i]){   // v2.31 午餐单不再拖死晚餐窗（截止/餐数按时段分开）；反向同理
+if(hasThisSess){   // v2.31 午餐单不再拖死晚餐窗（截止/餐数按时段分开）；反向同理
   var key=sessKey+'@'+i;
-  if(oMealsS[key]==null){excludedS.push(k);return;}
   dlm=Math.min(dlm,oDlmS[key]);m=oMealsS[key];rep=1;
 }else if(rep){dlm=Math.min(dlm,k.dlM);}   // v2.30 报单点只卡截止（组头窗尾/备注从严），不再设「最早可送达」——历史实测早到 66~85 分客户均接受，早到风险由 50 分保温纪律兜底
 mainPts.push({k:k,dlm:dlm,m:m,ea:ea,rep:rep});

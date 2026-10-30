@@ -109,7 +109,7 @@ details.wk-drop[open]>summary{border-radius:12px 12px 4px 4px}
 </head>
 <body>
 <div class="panel">
-  <h3>🥗 壮壮FIT 配送助手 <span id="verTag" style="font-size:11px;color:#999;font-weight:normal">v2.34</span></h3>
+  <h3>🥗 壮壮FIT 配送助手 <span id="verTag" style="font-size:11px;color:#999;font-weight:normal">v2.35</span></h3>
   <div class="tabs">
     <button class="tabbtn on" id="tab-plan" type="button">🛵 排线</button>
     <button class="tabbtn" id="tab-cust" type="button">👥 客户</button>
@@ -236,6 +236,7 @@ details.wk-drop[open]>summary{border-radius:12px 12px 4px 4px}
           <div class="wk-card"><h3>配送成本结构</h3><div class="wk-desc" id="wk-costdesc"></div><div id="wk-cost" class="wk-chart"></div></div>
           <div class="wk-card"><h3>每日单量与配送费</h3><div class="wk-desc" id="wk-dailydesc"></div><div id="wk-daily" class="wk-chart"></div></div>
         </div>
+        <div class="wk-card" style="margin-top:10px"><h3>🛵 单趟装载能力（一趟配多餐）</h3><div class="wk-desc" id="wk-tripdesc"></div><div id="wk-trip" class="wk-chart" style="height:240px"></div></div>
         <div class="wk-foot" id="wk-foot"></div>
       </div>
     </details>
@@ -1138,6 +1139,21 @@ var WK={
     {name:'谌师傅 7单',v:50,c:'#4a9d8e'},
     {name:'郭师傅 6单',v:45,c:'#8fd4b4'},
     {name:'自配 4单(0元)',v:0.001,c:'#c8d6cf'}
+  ],
+  trips:[   // 每趟集约装载：lbl=轴标签 n=餐数 min=趟时长(分) dep/arr=出发到达 rider=骑手 seg=午/晚
+    {lbl:'周四①',n:11,min:86,dep:'11:00',arr:'12:26',rider:'王师傅',seg:'午'},
+    {lbl:'周四②',n:4,min:49,dep:'16:20',arr:'17:09',rider:'王师傅',seg:'晚'},
+    {lbl:'周四③',n:1,min:10,dep:'18:30',arr:'18:40',rider:'自配',seg:'晚'},
+    {lbl:'周五①',n:7,min:76,dep:'10:50',arr:'12:06',rider:'王师傅',seg:'午'},
+    {lbl:'周五②',n:6,min:53,dep:'16:30',arr:'17:23',rider:'王师傅',seg:'晚'},
+    {lbl:'周一①',n:7,min:54,dep:'11:00',arr:'11:54',rider:'王师傅',seg:'午'},
+    {lbl:'周一②',n:6,min:34,dep:'16:30',arr:'17:04',rider:'王师傅',seg:'晚'},
+    {lbl:'周二①',n:6,min:91,dep:'11:00',arr:'12:31',rider:'郭师傅(替班)',seg:'午'},
+    {lbl:'周二②',n:1,min:5,dep:'17:45',arr:'17:50',rider:'自配',seg:'晚'},
+    {lbl:'周二③',n:1,min:60,dep:'17:45',arr:'18:45',rider:'自配',seg:'晚'},
+    {lbl:'周三①',n:4,min:29,dep:'11:10',arr:'11:39',rider:'王师傅',seg:'午'},
+    {lbl:'周三②',n:7,min:62,dep:'16:45',arr:'17:47',rider:'谌师傅',seg:'晚'},
+    {lbl:'周三③',n:1,min:4,dep:'11:26',arr:'11:30',rider:'自配',seg:'午'}
   ]
 };
 function wkLoadEcharts(cb){
@@ -1189,7 +1205,39 @@ function wkRender(){
       {name:'配送费(元)',type:'line',yAxisIndex:1,data:WK.fees,smooth:true,symbol:'circle',symbolSize:8,lineStyle:{color:'#e6a23c',width:2.5},itemStyle:{color:'#e6a23c'},z:5}
     ]
   });
-  window.__wkCharts=[c1,c2];
+  var trips=WK.trips,rid=trips.filter(function(t){return t.rider!=='自配';});
+  var maxN=Math.max.apply(null,trips.map(function(t){return t.n;}));
+  var maxT=trips.filter(function(t){return t.n===maxN;})[0];
+  function avg(a,f){return Math.round(a.reduce(function(s,x){return s+f(x);},0)/a.length*10)/10;}
+  var midT=rid.filter(function(t){return t.seg==='午';}),evT=rid.filter(function(t){return t.seg==='晚';});
+  document.getElementById('wk-tripdesc').innerHTML=
+    '单趟峰值 <b>'+maxN+' 餐</b>（'+maxT.lbl+'·'+maxT.rider+'，'+maxT.min+' 分）｜师傅趟均 <b>'+avg(rid,function(t){return t.n;})+' 餐</b>｜'
+   +'午趟均 '+avg(midT,function(t){return t.n;})+' 餐 / 每餐约 '+avg(midT,function(t){return Math.round(t.min/t.n*10)/10;})+' 分｜'
+   +'晚趟均 '+avg(evT,function(t){return t.n;})+' 餐 / 每餐约 '+avg(evT,function(t){return Math.round(t.min/t.n*10)/10;})+' 分（自配 1 餐趟不计）';
+  var c3=echarts.init(document.getElementById('wk-trip'));
+  c3.setOption({
+    tooltip:{trigger:'axis',formatter:function(ps){
+      var t=trips[ps[0].dataIndex];
+      return t.lbl+' · '+t.rider+'<br/>装载 '+t.n+' 餐｜'+t.dep+'→'+t.arr+'（'+t.min+' 分）<br/>每餐约 '+(Math.round(t.min/t.n*10)/10)+' 分';
+    }},
+    grid:{left:36,right:44,top:30,bottom:26},
+    xAxis:{type:'category',data:trips.map(function(t){return t.lbl;}),axisLabel:{color:'#8a968f',fontSize:10},axisLine:{lineStyle:{color:'#dfe5e2'}}},
+    yAxis:[
+      {type:'value',name:'餐',nameTextStyle:{color:'#8a968f'},axisLabel:{color:'#8a968f'},splitLine:{lineStyle:{color:'#eef2f0'}}},
+      {type:'value',name:'分/餐',nameTextStyle:{color:'#8a968f'},axisLabel:{color:'#8a968f'},splitLine:{show:false},max:20}
+    ],
+    series:[
+      {name:'趟装载餐数',type:'bar',barWidth:18,data:trips.map(function(t){
+        return {value:t.n,itemStyle:{color:t.rider==='自配'?'#c8d6cf':(t.seg==='午'?'#2e9e6b':'#4a9d8e')}};}),
+       label:{show:true,position:'top',color:'#1d7a4f',fontSize:10,fontWeight:600},
+       markLine:{symbol:'none',silent:true,lineStyle:{color:'#e6a23c',type:'dashed'},
+        label:{formatter:'峰值 {c} 餐',color:'#b35c12',fontSize:10},data:[{yAxis:maxN}]}},
+      {name:'每餐耗时(分)',type:'line',yAxisIndex:1,smooth:true,symbol:'circle',symbolSize:6,
+       lineStyle:{color:'#e6a23c',width:2,type:'dashed'},itemStyle:{color:'#e6a23c'},
+       data:trips.map(function(t){return t.rider==='自配'?null:Math.round(t.min/t.n*10)/10;})}
+    ]
+  });
+  window.__wkCharts=[c1,c2,c3];
 }
 document.getElementById('tab-week').addEventListener('click',function(){
   if(!window.__wkInit){window.__wkInit=true;wkLoadEcharts(wkRender);}
@@ -1274,7 +1322,7 @@ function riderPrice(pts,kmOut){
   var sessOK=function(k){var t=k.t||'';return sess==='all'||t===''||t==='b'||t===(sess==='lunch'?'l':'d');};
   var mainPts=[],excluded=[];
   var todayK=new Date().toDateString();
-var oMeals={},oMealsS={},oDlmS={},oEaS={},oNamesS={},oHas={};   // v2.31 报单订单按「组头时段」分账：同一点位可能午晚各有报单（如烁屿前台3单分两波），本时段只吃本时段的截止与餐数；v2.34 oEaS 记本时段窗口起点（组头晚于本窗时作「最早可送达」）
+var oMeals={},oMealsS={},oDlmS={},oEaS={},oNamesS={},oHas={};   // v2.31 报单订单按「组头时段」分账：同一点位可能午晚各有报单（如烁屿前台3单分两波），本时段只吃本时段的截止与餐数；v2.35 oEaS 记本时段窗口起点（组头晚于本窗时作「最早可送达」）
 (window.__rptOrders||[]).forEach(function(o){
   if(!o.match||o.match.i==null)return;
   var i2=o.match.i;
@@ -1287,7 +1335,7 @@ var oMeals={},oMealsS={},oDlmS={},oEaS={},oNamesS={},oHas={};   // v2.31 报单�
   oMealsS[key]=(oMealsS[key]||0)+(o.meals||1);
   if(o.user){var na=oNamesS[key]||(oNamesS[key]=[]);if(na.indexOf(o.user)<0)na.push(o.user);}
   if(o.dlMin!=null&&(oDlmS[key]===undefined||o.dlMin<oDlmS[key]))oDlmS[key]=o.dlMin;
-  var ws=o.winS||0;if(ws&&(oEaS[key]===undefined||ws>oEaS[key]))oEaS[key]=ws;   // v2.34 组头窗口起点：晚于本窗收盘时生效为最早可送达
+  var ws=o.winS||0;if(ws&&(oEaS[key]===undefined||ws>oEaS[key]))oEaS[key]=ws;   // v2.35 组头窗口起点：晚于本窗收盘时生效为最早可送达
 });
 var sessKey=(sess==='lunch')?'l':(sess==='dinner')?'d':null;   // 「全部时段」不拆波，维持旧行为
 var excludedS=[];   // 今日有报单但都在另一时段：本时段不排（午/晚分窗跑是常态）
@@ -1300,7 +1348,7 @@ var dlm=winEndMin+flex,ea=0,rep=(k.dlM&&k.dlD===todayK)?1:0,m=oMeals[i]||k.meals
 if(hasThisSess){   // v2.31 午餐单不再拖死晚餐窗（截止/餐数按时段分开）；反向同理
   var key=sessKey+'@'+i;
   dlm=Math.min(dlm,oDlmS[key]);m=oMealsS[key];rep=1;
-  if(oEaS[key]>winEndMin)ea=oEaS[key];   // v2.34 组头窗口起点晚于本窗收盘（如午窗里挂「12:31-13:00」）：按最早可送达卡住，早送违约；正常窗内早到仍按老习惯放行
+  if(oEaS[key]>winEndMin)ea=oEaS[key];   // v2.35 组头窗口起点晚于本窗收盘（如午窗里挂「12:31-13:00」）：按最早可送达卡住，早送违约；正常窗内早到仍按老习惯放行
 }else if(rep){dlm=Math.min(dlm,k.dlM);}   // v2.30 报单点只卡截止（组头窗尾/备注从严），不再设「最早可送达」——历史实测早到 66~85 分客户均接受，早到风险由 50 分保温纪律兜底
 mainPts.push({k:k,dlm:dlm,m:m,ea:ea,rep:rep});
 });

@@ -1206,35 +1206,51 @@ function wkRender(){
     ]
   });
   var trips=WK.trips,rid=trips.filter(function(t){return t.rider!=='自配';});
-  var maxN=Math.max.apply(null,trips.map(function(t){return t.n;}));
-  var maxT=trips.filter(function(t){return t.n===maxN;})[0];
+  var maxN=Math.max.apply(null,rid.map(function(t){return t.n;}));
+  var maxT=rid.filter(function(t){return t.n===maxN;})[0];
   function avg(a,f){return Math.round(a.reduce(function(s,x){return s+f(x);},0)/a.length*10)/10;}
   var midT=rid.filter(function(t){return t.seg==='午';}),evT=rid.filter(function(t){return t.seg==='晚';});
   document.getElementById('wk-tripdesc').innerHTML=
-    '单趟峰值 <b>'+maxN+' 餐</b>（'+maxT.lbl+'·'+maxT.rider+'，'+maxT.min+' 分）｜师傅趟均 <b>'+avg(rid,function(t){return t.n;})+' 餐</b>｜'
+    '单趟装载上限 <b>'+maxN+' 餐</b>（'+maxT.lbl.replace('①','')+' '+({'周四':'10.22','周五':'10.23','周一':'10.26','周二':'10.27','周三':'10.28'}[maxT.lbl.slice(0,2)]||'')+' · '+maxT.rider+'，'+maxT.min+' 分）｜'
    +'午趟均 '+avg(midT,function(t){return t.n;})+' 餐 / 每餐约 '+avg(midT,function(t){return Math.round(t.min/t.n*10)/10;})+' 分｜'
-   +'晚趟均 '+avg(evT,function(t){return t.n;})+' 餐 / 每餐约 '+avg(evT,function(t){return Math.round(t.min/t.n*10)/10;})+' 分（自配 1 餐趟不计）';
+   +'晚趟均 '+avg(evT,function(t){return t.n;})+' 餐 / 每餐约 '+avg(evT,function(t){return Math.round(t.min/t.n*10)/10;})+' 分（自配不计）';
+  var dayMap={'周四':'10.22','周五':'10.23','周六':'10.24','周日':'10.25','周一':'10.26','周二':'10.27','周三':'10.28'};
+  var dayOrd=['周四','周五','周六','周日','周一','周二','周三'];
+  var days=dayOrd.map(function(k){
+    var ts=trips.filter(function(t){return t.lbl.indexOf(k)===0;});
+    if(!ts.length)return null;
+    var rs=ts.filter(function(t){return t.rider!=='自配';}),pool=rs.length?rs:ts;
+    return {max:Math.max.apply(null,pool.map(function(t){return t.n;})),
+      avg:Math.round(pool.reduce(function(s,t){return s+t.n;},0)/pool.length*10)/10,
+      pm:Math.round(pool.reduce(function(s,t){return s+t.min/t.n;},0)/pool.length*10)/10};
+  });
+  function dfield(f){return days.map(function(d){return d?f(d):null;});}
   var c3=echarts.init(document.getElementById('wk-trip'));
   c3.setOption({
     tooltip:{trigger:'axis',formatter:function(ps){
-      var t=trips[ps[0].dataIndex];
-      return t.lbl+' · '+t.rider+'<br/>装载 '+t.n+' 餐｜'+t.dep+'→'+t.arr+'（'+t.min+' 分）<br/>每餐约 '+(Math.round(t.min/t.n*10)/10)+' 分';
-    }},
-    grid:{left:36,right:44,top:30,bottom:26},
-    xAxis:{type:'category',data:trips.map(function(t){return t.lbl;}),axisLabel:{color:'#8a968f',fontSize:10,interval:0,rotate:35},axisLine:{lineStyle:{color:'#dfe5e2'}}},
+      var i=ps[0].dataIndex,k=dayOrd[i],d=days[i];
+      if(!d)return k+'（'+dayMap[k]+'）· 无趟';
+      var s=k+'（'+dayMap[k]+'）';
+      ps.forEach(function(p){if(p.value!=null)s+='<br/>'+p.marker+p.seriesName+'：<b>'+p.value+(p.seriesName==='每餐耗时'?' 分':' 餐')+'</b>';});
+      return s;}},
+    legend:{top:0,textStyle:{color:'#8a968f',fontSize:10},itemWidth:14,itemHeight:8},
+    grid:{left:36,right:44,top:34,bottom:26},
+    xAxis:{type:'category',data:dayOrd.map(function(k){return dayMap[k]+' '+k;}),axisLabel:{color:'#8a968f',fontSize:10},axisLine:{lineStyle:{color:'#dfe5e2'}}},
     yAxis:[
       {type:'value',name:'餐',nameTextStyle:{color:'#8a968f'},axisLabel:{color:'#8a968f'},splitLine:{lineStyle:{color:'#eef2f0'}}},
       {type:'value',name:'分/餐',nameTextStyle:{color:'#8a968f'},axisLabel:{color:'#8a968f'},splitLine:{show:false},max:20}
     ],
     series:[
-      {name:'趟装载餐数',type:'bar',barWidth:18,data:trips.map(function(t){
-        return {value:t.n,itemStyle:{color:t.rider==='自配'?'#c8d6cf':(t.seg==='午'?'#2e9e6b':'#4a9d8e')}};}),
-       label:{show:true,position:'top',color:'#1d7a4f',fontSize:10,fontWeight:600},
-       markLine:{symbol:'none',silent:true,lineStyle:{color:'#e6a23c',type:'dashed'},
-        label:{formatter:'峰值 {c} 餐',color:'#b35c12',fontSize:10,position:'insideEndTop'},data:[{yAxis:maxN}]}},
-      {name:'每餐耗时(分)',type:'line',yAxisIndex:1,smooth:true,symbol:'circle',symbolSize:6,
-       lineStyle:{color:'#e6a23c',width:2,type:'dashed'},itemStyle:{color:'#e6a23c'},
-       data:trips.map(function(t){return t.rider==='自配'?null:Math.round(t.min/t.n*10)/10;})}
+      {name:'单趟峰值',type:'bar',barWidth:26,data:dfield(function(d){return d.max;}),
+       itemStyle:{color:'#2e9e6b',borderRadius:[3,3,0,0]},
+       label:{show:true,position:'top',color:'#1d7a4f',fontSize:10,fontWeight:600}},
+      {name:'趟均装载',type:'line',smooth:true,symbol:'circle',symbolSize:7,
+       data:dfield(function(d){return d.avg;}),
+       lineStyle:{color:'#4a9d8e',width:2.5},itemStyle:{color:'#4a9d8e'},
+       label:{show:true,position:'bottom',color:'#2b7a68',fontSize:10}},
+      {name:'每餐耗时',type:'line',yAxisIndex:1,smooth:true,symbol:'circle',symbolSize:6,
+       data:dfield(function(d){return d.pm;}),
+       lineStyle:{color:'#e6a23c',width:2,type:'dashed'},itemStyle:{color:'#e6a23c'}}
     ]
   });
   window.__wkCharts=[c1,c2,c3];

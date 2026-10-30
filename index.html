@@ -109,7 +109,7 @@ details.wk-drop[open]>summary{border-radius:12px 12px 4px 4px}
 </head>
 <body>
 <div class="panel">
-  <h3>🥗 壮壮FIT 配送助手 <span id="verTag" style="font-size:11px;color:#999;font-weight:normal">v2.47</span></h3>
+  <h3>🥗 壮壮FIT 配送助手 <span id="verTag" style="font-size:11px;color:#999;font-weight:normal">v2.48</span></h3>
   <div class="tabs">
     <button class="tabbtn on" id="tab-plan" type="button">🛵 排线</button>
     <button class="tabbtn" id="tab-cust" type="button">👥 客户</button>
@@ -125,12 +125,12 @@ details.wk-drop[open]>summary{border-radius:12px 12px 4px 4px}
 <div id="rptout"></div>
 </div>
 <details style="margin-top:6px"><summary style="font-size:12px;color:#888;cursor:pointer">⚙️ 排线参数（默认值可直接排，一般不用动）</summary>
-<div style="font-size:11px;color:#a0aaa4;margin:2px 0 4px">⏰ 窗口截止自动从报单识别（无报单回落：午 12:30 / 晚 18:30）；弹性固定 ±30 分；速度按骑手档案自动取，准备时间固定 0 分</div>
+<div style="font-size:11px;color:#a0aaa4;margin:2px 0 4px">⏰ 窗口截止自动从报单识别（无报单回落：午 12:30 / 晚 18:30）；弹性固定 ±30 分；准备时间固定 0 分；骑手<b>可勾多个</b>（并行班自动把趟分给各骑手，速度取均速）</div>
 <div class="addrow" style="flex-wrap:wrap;align-items:center;gap:4px 10px">
 <label style="font-size:12px;display:inline-flex;align-items:center;gap:3px">出发<input id="pdepart" type="time" class="gnum" style="width:84px"></label>
 <label style="font-size:12px;display:inline-flex;align-items:center;gap:3px">单班上限<input id="pmaxtrip" type="number" class="gnum" min="15" max="180" style="width:52px">分</label>
 <label style="font-size:12px;display:inline-flex;align-items:center;gap:3px"><input type="checkbox" id="pround"> 送完回店（顺序班）</label>
-<label style="font-size:12px;display:inline-flex;align-items:center;gap:3px">骑手<select id="prider" style="font-size:12px;max-width:110px"></select></label>
+<span style="font-size:12px;display:inline-flex;align-items:center;gap:3px">骑手<span id="priders" style="display:inline-flex;gap:2px 8px;flex-wrap:wrap"></span><button id="priderAdd" type="button" style="font-size:11px;padding:1px 6px;cursor:pointer">＋编辑</button></span>
 </div>
 <div class="addrow" style="align-items:center;flex-wrap:wrap;gap:4px 10px">
 <label style="font-size:12px;display:inline-flex;align-items:center;gap:3px">闪送：起步<input id="fstart" type="number" class="gnum" min="1" style="width:44px">元 /</label>
@@ -542,7 +542,7 @@ function parseRptText(raw){
       continue;
     }
     if(!cur.user){
-      var fm=L.match(/^([\u4e00-\u9fa5][\u4e00-\u9fa5·]{1,5})\s+(1[3-9]\d{9})\s+(.{4,})$/);   // v2.47 兜底：报单直接一行「杨金鑫 13408092087 青度健身（香月湖店）」无前缀格式
+      var fm=L.match(/^([\u4e00-\u9fa5][\u4e00-\u9fa5·]{1,5})\s+(1[3-9]\d{9})\s+(.{4,})$/);   // v2.48 兜底：报单直接一行「杨金鑫 13408092087 青度健身（香月湖店）」无前缀格式
       if(fm){cur.user=fm[1];cur.phone=fm[2];cur.addr=fm[3];continue;}
     }
     if(!cur.user&&!/^[-—=]{3,}$/.test(L)) cur.dishes.push(L);
@@ -562,7 +562,7 @@ function parseRptText(raw){
     if(tms.length)o.dlMin=o.winE;
 o.dlMemo=parseDeadlineTime(o.memo||'')||parseDeadlineTime(o.note||'');   // 整单/本餐备注里的硬截止（如「12点之前送达」）；从严优先于组头窗尾
 if(o.dlMemo!=null){ o.dlMin=(o.dlMin!=null?Math.min(o.dlMin,o.dlMemo):o.dlMemo); }
-o.eaWanted=(function(s){   // v2.47 备注「不早于」诉求：希望X:XX送到/别太早 → 最早可送达；无时刻则按组头窗头；含「X点前」语义时归截止解析不作最早约束
+o.eaWanted=(function(s){   // v2.48 备注「不早于」诉求：希望X:XX送到/别太早 → 最早可送达；无时刻则按组头窗头；含「X点前」语义时归截止解析不作最早约束
 if(!s||s==='无')return null;
 if(!/希望|别太早|不要太早|不早于|别早于|凉了/.test(s))return null;
 if(/之前|以前|点前|前送/.test(s))return null;
@@ -1071,12 +1071,17 @@ loadP2El();
 var riders=[];try{riders=JSON.parse(localStorage.getItem('riders')||'[]');}catch(e){}
 if(!riders.length){riders=[{name:'王师傅',home:'伏龙小区',pos:null,speed:28,notes:'道路骑行≈30km/h（10.15~10.20履约到达回归25段）；每点停留4~5分；排线参数用28保守'}];saveRiders();}
 function saveRiders(){try{localStorage.setItem('riders',JSON.stringify(riders));}catch(e){}}
-function curRider(){for(var i=0;i<riders.length;i++)if(riders[i].name===planParams.rider)return riders[i];return riders[0]||null;}
+function riderByName(nm){for(var i=0;i<riders.length;i++)if(riders[i].name===nm)return riders[i];return null;}
+function curRider(){return riderByName((planParams.riders&&planParams.riders[0])||planParams.rider)||riders[0]||null;}   // 多选后主骑手=勾选第一个
 planParams.rider=planParams.rider||(riders[0]?riders[0].name:'');
-function renderRiderSel(){var sel=document.getElementById('prider');if(!sel)return;
-  sel.innerHTML=riders.map(function(r){return '<option'+(r.name===planParams.rider?' selected':'')+'>'+escHtml(r.name)+'</option>';}).join('')+'<option value="__new">＋新建/编辑…</option>';}
-function applyRiderSpeed(){var r=curRider();if(r&&r.speed)planParams.speed=r.speed;}
-function ensureRiderPos(){var r=curRider();if(r&&r.home&&!r.pos){geoOne(r.home).then(function(loc){if(loc){r.pos=[loc.lng,loc.lat];saveRiders();}});}}
+if(!planParams.riders||!planParams.riders.length)planParams.riders=[planParams.rider];   // 单选→多选迁移
+planParams.riders=planParams.riders.filter(function(nm){return !!riderByName(nm);});
+if(!planParams.riders.length&&riders[0])planParams.riders=[riders[0].name];
+function selRiders(){return (planParams.riders||[]).map(riderByName).filter(Boolean);}
+function renderRiderSel(){var box=document.getElementById('priders');if(!box)return;   // 骑手改勾选（至少一个，可多选）
+  box.innerHTML=riders.map(function(r){return '<label style="display:inline-flex;align-items:center;gap:2px"><input type="checkbox" class="riderChk"'+(planParams.riders.indexOf(r.name)>-1?' checked':'')+' data-n="'+escHtml(r.name)+'"> '+escHtml(r.name)+'</label>';}).join('');}
+function applyRiderSpeed(){var rs=selRiders(),sp=0,n=0;rs.forEach(function(r){if(r.speed){sp+=r.speed;n++;}});if(n)planParams.speed=Math.round(sp/n*10)/10;}   // 多骑手取均速
+function ensureRiderPos(){selRiders().forEach(function(r){if(r.home&&!r.pos){geoOne(r.home).then(function(loc){if(loc){r.pos=[loc.lng,loc.lat];saveRiders();}});}});}
 function riderEdit(){
   var name=prompt('骑手名字：');if(!name)return;
   var r=null;for(var i=0;i<riders.length;i++)if(riders[i].name===name)r=riders[i];
@@ -1087,16 +1092,19 @@ function riderEdit(){
   if(sp!==null&&+sp>0)r.speed=+sp;
   var nt=prompt('『'+name+'』习惯/备注（可留空，之后随时补充）：',r.notes||'');
   if(nt!==null)r.notes=nt;
-  saveRiders();planParams.rider=name;applyRiderSpeed();
+  saveRiders();if(planParams.riders.indexOf(name)<0)planParams.riders.push(name);planParams.rider=name;applyRiderSpeed();
   try{localStorage.setItem('planParams',JSON.stringify(planParams));}catch(e){}
   renderRiderSel();ensureRiderPos();
 }
-document.getElementById('prider').addEventListener('change',function(){var v=this.value;
-  if(v==='__new'){renderRiderSel();riderEdit();return;}
-  planParams.rider=v;applyRiderSpeed();
-  try{localStorage.setItem('planParams',JSON.stringify(planParams));}catch(e){}
+document.getElementById('priders').addEventListener('change',function(e){
+  var t=e.target;if(!t.classList||!t.classList.contains('riderChk'))return;
+  var on=[].slice.call(document.querySelectorAll('.riderChk')).filter(function(c){return c.checked;}).map(function(c){return c.getAttribute('data-n');});
+  if(!on.length){t.checked=true;alert('至少勾选一名骑手');return;}   // 至少一个
+  planParams.riders=on;planParams.rider=on[0];applyRiderSpeed();
+  try{localStorage.setItem('planParams',JSON.stringify(planParams));}catch(e2){}
   ensureRiderPos();
 });
+document.getElementById('priderAdd').addEventListener('click',riderEdit);
 renderRiderSel();applyRiderSpeed();ensureRiderPos();
 // 选项卡切换：排线/客户/接单判断/说明
 var TABS=['plan','cust','judge','help','week'];
@@ -1265,7 +1273,7 @@ speed:planParams.speed||20,prep:0,
 depart:document.getElementById('pdepart').value||'',round:document.getElementById('pround').checked,
 maxTrip:+document.getElementById('pmaxtrip').value||55,flex:30,
     fstart:+document.getElementById('fstart').value||13,fkm:+document.getElementById('fkm').value||3,fper:+document.getElementById('fper').value||2,
-    rider:planParams.rider||''};
+    rider:planParams.rider||'',riders:planParams.riders||[]};
   try{localStorage.setItem('planParams',JSON.stringify(planParams));}catch(e){}
 }
 function pset(html){document.getElementById('presult').innerHTML=html;}
@@ -1307,8 +1315,8 @@ savePlanParams();
 if(window.__rptBusy){ pset('⏳ <b>识别还在进行中</b>（新客地址定位需要几秒）——识别完成后会<b>自动点亮并排线</b>，不用手动点亮，请稍等几秒；若超过 1 分钟没动静，刷新页面重新识别一次'); return; }
 var live=todaySel.filter(function(i){return customers[i];});
 if(!live.length){ pset('<span class="mid">今天还没有有单地址。正常流程：粘报单 → 「🔍 识别报单」→ 识别完成后会<b>自动点亮老客、新客入库上地图并直接排线</b>，全程不用手动点亮。也可以去客户页手动点亮「有单」。</span>'); return; }
-var sessAuto='';   // v2.47 时段/窗口截止自动识别：组头窗尾=本时段收盘；午晚都有单则全时段一起排
-var oMeals={},oMealsS={},oDlmS={},oEaS={},oEaW={},oNamesS={},oHas={};   // v2.31 报单订单按「组头时段」分账：同一点位可能午晚各有报单（如烁屿前台3单分两波），本时段只吃本时段的截止与餐数；v2.47 oEaS 记本时段窗口起点（组头晚于本窗时作「最早可送达」）；v2.47 oEaW 记备注不早于
+var sessAuto='';   // v2.48 时段/窗口截止自动识别：组头窗尾=本时段收盘；午晚都有单则全时段一起排
+var oMeals={},oMealsS={},oDlmS={},oEaS={},oEaW={},oNamesS={},oHas={};   // v2.31 报单订单按「组头时段」分账：同一点位可能午晚各有报单（如烁屿前台3单分两波），本时段只吃本时段的截止与餐数；v2.48 oEaS 记本时段窗口起点（组头晚于本窗时作「最早可送达」）；v2.48 oEaW 记备注不早于
 var sessCnt={l:0,d:0},endBy={l:null,d:null};
 (window.__rptOrders||[]).forEach(function(o){
   if(!o.match||o.match.i==null)return;
@@ -1325,8 +1333,8 @@ var sessCnt={l:0,d:0},endBy={l:null,d:null};
   oMealsS[key]=(oMealsS[key]||0)+(o.meals||1);
   if(o.user){var na=oNamesS[key]||(oNamesS[key]=[]);if(na.indexOf(o.user)<0)na.push(o.user);}
   if(o.dlMin!=null&&(oDlmS[key]===undefined||o.dlMin<oDlmS[key]))oDlmS[key]=o.dlMin;
-  var ws=o.winS||0;if(ws&&(oEaS[key]===undefined||ws>oEaS[key]))oEaS[key]=ws;   // v2.47 组头窗口起点：晚于本窗收盘时生效为最早可送达
-var ew=o.eaWanted;if(ew==='winS')ew=o.winS||null;   // v2.47 备注不早于：无时刻按组头窗头，有时刻按备注时刻
+  var ws=o.winS||0;if(ws&&(oEaS[key]===undefined||ws>oEaS[key]))oEaS[key]=ws;   // v2.48 组头窗口起点：晚于本窗收盘时生效为最早可送达
+var ew=o.eaWanted;if(ew==='winS')ew=o.winS||null;   // v2.48 备注不早于：无时刻按组头窗头，有时刻按备注时刻
 if(ew!=null&&(oEaW[key]===undefined||ew>oEaW[key]))oEaW[key]=ew;
 });
 var sess=(sessCnt.l&&sessCnt.d)?'all':(sessCnt.d?'dinner':(sessCnt.l?'lunch':(planParams.session||'lunch')));
@@ -1334,10 +1342,14 @@ var lunchEnd=endBy.l||hm2min('12:30'),dinnerEnd=endBy.d||hm2min('18:30');   // �
 var departMin = planParams.depart ? hm2min(planParams.depart) : (sess==='dinner'?hm2min('16:55'):hm2min('10:55'));
 var winEndMin = (sess==='dinner')?dinnerEnd:(sess==='lunch')?lunchEnd:Math.min(lunchEnd,dinnerEnd);
 sessAuto='🧾 报单识别：'+(sess==='all'?('午窗 '+min2hm(lunchEnd)+' / 晚窗 '+min2hm(dinnerEnd)+'，两窗一起排'):(sess==='dinner'?('晚窗，截止 '+min2hm(dinnerEnd)):sessCnt.l?('午窗，截止 '+min2hm(lunchEnd)):('无报单，按'+(sess==='dinner'?'晚':'午')+'窗默认截止 '+min2hm(winEndMin))));
-  var prep=0, speed=+planParams.speed||20, maxTrip=+planParams.maxTrip||55;   // v2.47 准备固定 0 分，速度由骑手档案自动同步
-  var autoRelay=false;   // v2.30 单骑手自动切单人接力：并行班是多人方案，一个人跑不了
-  try{if(riders&&riders.length<=1&&!planParams.round){planParams.round=true;autoRelay=true;var _pr=document.getElementById('pround');if(_pr)_pr.checked=true;}}catch(e){}
-var flex=30;   // v2.47 弹性写死：窗口截止往后放宽 30 分（与客户约定的迟到容忍度共识）
+  var prep=0, speed=+planParams.speed||20, maxTrip=+planParams.maxTrip||55;   // 准备固定 0 分；速度按勾选骑手自动取（多人取均速）
+  var autoRelay=false,autoPar=false;   // 单骑手自动切单人接力；多骑手自动切并行班
+  var selN=selRiders().length;
+  try{
+    if(selN<=1&&!planParams.round){planParams.round=true;autoRelay=true;var _pr=document.getElementById('pround');if(_pr)_pr.checked=true;}
+    if(selN>1&&planParams.round){planParams.round=false;autoPar=true;var _pr2=document.getElementById('pround');if(_pr2)_pr2.checked=false;}   // 送完回店=单人接力，与多骑手矛盾
+  }catch(e){}
+var flex=30;   // v2.48 弹性写死：窗口截止往后放宽 30 分（与客户约定的迟到容忍度共识）
   var ride=function(a,b){return km(a,b)*ROAD_K/speed*60;};
   // v2.27 骑手档案：末趟终点尽量近家（回程=下班路，不空跑）
   var rider=curRider();ensureRiderPos();
@@ -1364,8 +1376,8 @@ var dlm=((sess==='all')?((k.t==='d')?dinnerEnd:lunchEnd):winEndMin)+flex,ea=0,re
 if(hasThisSess){   // v2.31 午餐单不再拖死晚餐窗（截止/餐数按时段分开）；反向同理
   var key=sessKey+'@'+i;
   dlm=Math.min(dlm,oDlmS[key]!=null?oDlmS[key]:dlm);m=oMealsS[key];rep=1;
-  if(oEaW[key]!=null)ea=Math.max(ea,oEaW[key]);   // v2.47 备注明确「希望X:XX送到/别太早」：硬最早可送达
-else if(oEaS[key]>winEndMin)ea=oEaS[key];   // v2.47 组头窗口起点晚于本窗收盘（如午窗里挂「12:31-13:00」）：按最早可送达卡住，早送违约；正常窗内早到仍按老习惯放行
+  if(oEaW[key]!=null)ea=Math.max(ea,oEaW[key]);   // v2.48 备注明确「希望X:XX送到/别太早」：硬最早可送达
+else if(oEaS[key]>winEndMin)ea=oEaS[key];   // v2.48 组头窗口起点晚于本窗收盘（如午窗里挂「12:31-13:00」）：按最早可送达卡住，早送违约；正常窗内早到仍按老习惯放行
 }else if(rep){dlm=Math.min(dlm,k.dlM);}   // v2.30 报单点只卡截止（组头窗尾/备注从严），不再设「最早可送达」——历史实测早到 66~85 分客户均接受，早到风险由 50 分保温纪律兜底
 mainPts.push({k:k,dlm:dlm,m:m,ea:ea,rep:rep});
 });
@@ -1419,7 +1431,8 @@ if(!mainPts.length){
   var n=groups.length;
   var warn=sessAuto?('🧾 '+sessAuto.replace('🧾 ','')):'';
   warn+=depSnapNote;
-  if(autoRelay)warn+='<br>🔁 检测到只有 1 名骑手，已自动按「送完回店（单人接力）」排线——并行班是多人方案';
+  if(autoRelay)warn+='<br>🔁 检测到只勾了 1 名骑手，已自动按「送完回店（单人接力）」排线——并行班是多人方案';
+  if(autoPar)warn+='<br>🔀 勾选了 '+selN+' 名骑手，已自动按「并行班」排线并分派各趟（送完回店=单人接力，与多骑手矛盾）';
   tight.forEach(function(w){warn+='<br>⚠️ <b>'+glabel(w.g)+'</b> 时限 '+min2hm(w.g.dlm)+' 来不及：需最晚 '+min2hm(w.latest)+' 出发——建议单独提前送/自送/与客户改约';});
   excluded.forEach(function(k){warn+='<br>· '+k.name+'：习惯时段为「'+(TIME_MAP[k.t||'']||'不固定')+'」，未纳入本次排线';});
   excludedS.forEach(function(k){warn+='<br>· '+k.name+'：今日报单在另一时段（本时段无单），未纳入——午/晚分窗各跑一次';});
@@ -1629,9 +1642,43 @@ if(!mainPts.length){
     });
     tr.latest=(slack===1e9||slack<0)?tr.dep:tr.dep+slack;
   });
+  // 8.7) 趟→骑手分派：并行班勾了多名骑手时，每趟指派给对应骑手（分配合适的线路给对应的骑手）
+  var selRs=selRiders(),assignNote='';
+  if(planParams.round&&selRs.length===1)trips.forEach(function(tr){tr.rider=selRs[0];});
+  if(!planParams.round&&selRs.length>1&&trips.length){
+    if(trips.length<=selRs.length){
+      // 趟数≤骑手数：每骑手一趟，按「趟末点离家最近」贪心配对（回程=下班路）；没填住址的骑手排后面兜底
+      var tp=trips.slice(),rp=selRs.slice();
+      while(tp.length&&rp.length){
+        var bi=0,bj=0,bd=1e9;
+        for(var t3=0;t3<tp.length;t3++)for(var r3=0;r3<rp.length;r3++){
+          var d3=(rp[r3].pos)?km(groups[tp[t3].seg[tp[t3].seg.length-1]].pos,rp[r3].pos):999;
+          if(d3<bd){bd=d3;bi=t3;bj=r3;}
+        }
+        tp[bi].rider=rp[bj];tp.splice(bi,1);rp.splice(bj,1);
+      }
+    }else{
+      // 趟数＞骑手数：按趟序分给最早空闲的骑手，骑手内接力（下一趟等他送完回店再出发）
+      var avail=selRs.map(function(r){return {r:r,at:departMin};});
+      trips.forEach(function(tr){
+        avail.sort(function(a,b){return a.at-b.at;});
+        var a0=avail[0];tr.rider=a0.r;
+        var dep=Math.max(tr.dep,a0.at);
+        if(dep>tr.dep+0.5){
+          tr.dep=dep;tr.dep0=dep;
+          var info2=segInfo(tr.seg,dep);tr.info=info2;
+          if(!info2.ok)assignNote+='<br>⚠️ '+escHtml(a0.r.name)+' 连跑多趟有晚点风险（最早 '+min2hm(dep)+' 出发）：建议加一名骑手或该趟改闪送';
+        }
+        var lastP2=tr.seg.length?groups[tr.seg[tr.seg.length-1]].pos:ORIGIN;
+        a0.at=tr.info.finish+ride(lastP2,ORIGIN);   // 回店后才有下一趟
+      });
+    }
+    var idleRs=selRs.filter(function(r){return !trips.some(function(tr){return tr.rider===r;});});
+    if(idleRs.length)assignNote+='<br>· 没分到线的骑手：'+idleRs.map(function(r){return escHtml(r.name);}).join('、')+'（本次趟数用不上）';
+  }
   // 8.5) 一趟可行性说明：若全部点串成一趟时限可行但超「单班上限」，或早出发即可赶上时限，给出明确提示
   var oneTripHint='';
-  if(trips.length>1&&planTour.length){
+  if(trips.length>1&&planTour.length&&selRs.length<=1){   // 多骑手并行时各趟分工是目的，不再怠恿并成 1 趟
     var infoAll=segInfo(planTour,departMin);
     var durAll=Math.round(infoAll.dur);
     if(infoAll.ok){
@@ -1680,12 +1727,13 @@ if(!mainPts.length){
       var packAt=tr.dep;   // v2.30 打包=出发（保温已按预计送达校验）
       var seq=[ORIGIN].concat(tr.seg.map(function(gi){return groups[gi].pos;}));
       var back=planParams.round&&tr.seg.length;
+      var spdT=(tr.rider&&tr.rider.speed)?tr.rider.speed:speed;   // 各趟按被派骑手速度折算
       var kmAcc=0,etas=[],clock=tr.dep+prep,stopMin=0,late=false,slack=1e9,waited=0;
       for(var q=0;q<tr.seg.length;q++){
         var r=legRes[li++];
         var dk=r?r.km:km(seq[q],seq[q+1])*ROAD_K;
         if(!r)apiFail=true;
-        var mins=dk/speed*60;
+        var mins=dk/spdT*60;
         kmAcc+=dk;clock+=mins;
         if(clock<groups[tr.seg[q]].ea){waited+=groups[tr.seg[q]].ea-clock;clock=groups[tr.seg[q]].ea;}   // 实测后同样等窗到「X点前」下界
         etas.push({gi:tr.seg[q],t:clock});
@@ -1699,7 +1747,7 @@ if(!mainPts.length){
         var r2=legRes[li++];
         var dk2=r2?r2.km:km(seq[tr.seg.length],ORIGIN)*ROAD_K;
         if(!r2)apiFail=true;
-        kmAcc+=dk2;clock+=dk2/speed*60;
+        kmAcc+=dk2;clock+=dk2/spdT*60;
         if(r2&&r2.pts&&r2.pts.length>1)planLines.push(new AMap.Polyline({path:r2.pts,strokeColor:TRIP_COLORS[ti%TRIP_COLORS.length],strokeWeight:5,strokeOpacity:.9,showDir:true,map:map,zIndex:170}));
       }
       var homeBack=back&&homeP&&ti===trips.length-1;
@@ -1708,7 +1756,7 @@ if(!mainPts.length){
       tr.latest=(slack===1e9||slack<0)?tr.dep:tr.dep+slack;   // 最晚出发也按实测重算
       var names=tr.seg.map(function(gi){return glabel(groups[gi]);});
       var meals=tr.seg.reduce(function(s,gi){return s+groups[gi].meals;},0);
-      var dur=Math.round(prep+kmAcc/speed*60+stopMin);
+      var dur=Math.round(prep+kmAcc/spdT*60+stopMin);
       var tripFlash=0;
       flashList.forEach(function(fl){if(fl.ti===ti)tripFlash+=fl.price;});
       totKm+=kmAcc;totMeals+=meals;totFlash+=tripFlash;
@@ -1719,13 +1767,13 @@ if(!mainPts.length){
       var adv=gateOk?'✅ 过闸（'+meals+'餐×5≥班价'+rp.p+'）可派骑手':'⚠️ 未过闸（'+meals+'餐×5＜班价'+rp.p+'），建议自送/攒班';
       totRider+=rp.p;
       blocks.push('<div style="margin:8px 0;padding:8px 10px;border:1px solid '+col+';border-left:5px solid '+col+';border-radius:8px;background:#fff">'
-        +'<b style="color:'+col+'">🛵 第'+(ti+1)+'趟</b>（'+tr.seg.length+'点'+meals+'餐）：出餐点 → '+names.join(' → ')
+        +'<b style="color:'+col+'">🛵 第'+(ti+1)+'趟</b>（'+tr.seg.length+'点'+meals+'餐'+(tr.rider?' · <b>'+escHtml(tr.rider.name)+'</b>':'')+'）：出餐点 → '+names.join(' → ')
         +'<br>⏱ 打包 <b>'+min2hm(packAt)+'</b>｜出发 <b>'+min2hm(tr.dep)+'</b>｜最晚 '+min2hm(tr.latest)+' 出发｜ETA：'+etas.map(function(e2){return glabel(groups[e2.gi])+' '+min2hm(e2.t);}).join('、')
         +(planParams.round&&ti>0&&prevReturn>packFloor+0.5?'<br>🔁 出发由上一趟回店顺延（本趟最早可出发 '+min2hm(packFloor)+'，上一趟回店 '+min2hm(prevReturn)+'）；若 ETA 顶到截止请把末点挪走/跑腿':'')
         +(waited>0.5?'<br>⏸ 本趟含等送达窗口约 '+Math.round(waited)+' 分（不能早于窗口起点送达）：可把出发调晚减少空等':'')
         +'<br>📏 计价全线 <b>'+kmOut.toFixed(1)+'km</b>（店→末点，回程不计价）｜用时约 <b>'+dur+'分</b>（上楼'+stopMin+'分）'+(back?(homeBack?'｜<b>到家</b> ':'｜回店 '):'｜送完 ')+min2hm(clock)
         +'<br>💰 骑手班价：整趟一口价 <b>'+rp.p+'元</b>（'+tr.seg.length+'点×'+(kmOut<=3?'≤3':kmOut<=8?'4~8':kmOut<=13?'9~13':kmOut<=18?'14~18':'19~22')+'km 档'+(rp.cap?'，超表按顶档':'')+'）｜餐均 '+(rp.p/Math.max(1,meals)).toFixed(1)+'元｜闪送逐点合计 '+tripFlash+'元 → '+adv
-        +'<br>📋 发骑手文案：'+tr.seg.length+' 个点、全线 '+kmOut.toFixed(1)+' 公里、约 '+dur+' 分钟、整趟 '+rp.p+' 元'
+        +'<br>📋 发骑手文案：'+(tr.rider?'@'+escHtml(tr.rider.name)+' ':'')+tr.seg.length+' 个点、全线 '+kmOut.toFixed(1)+' 公里、约 '+dur+' 分钟、整趟 '+rp.p+' 元'
         +(dur>maxTrip?'<br><span class="bad">⚠️ 超单班上限（实测约'+dur+'分＞'+maxTrip+'分），孤点必送</span>':'')
         +(late?'<br><span class="bad">⚠️ 按实测距离这趟有晚点风险，建议提前出发或把末点挪给别的趟</span>':'')
         +'</div>');
@@ -1734,16 +1782,17 @@ if(!mainPts.length){
     if(homeP&&planParams.round&&trips.length){var lt=trips[trips.length-1];var hd=km(groups[lt.seg[lt.seg.length-1]].pos,homeP);
       homeHint='<br>🏠 末趟终点即'+escHtml(rider?rider.name:'骑手')+'家方向（'+escHtml(rider&&rider.home||'')+'），回程不空跑；末点离家 '+hd.toFixed(1)+'km'+(hd>2?'——有离家更近的点可调到本趟末尾':'，很顺');}
     var head='✅ <b>共 '+trips.length+' 趟</b>｜'+live.length+' 个有单点｜<b>'+totMeals+' 餐</b>｜全线 '+totKm.toFixed(1)+'km｜<b>跑腿班价合计 '+totRider+' 元</b>'
-      +(rider?'<br>👤 骑手：<b>'+escHtml(rider.name)+'</b>'+(rider.home?'（家：'+escHtml(rider.home)+'）':'')+(rider.speed?' · '+rider.speed+'km/h':'')+(rider.notes?' · 📝'+escHtml(rider.notes):''):'')
+      +(selRs.length?'<br>👤 骑手：<b>'+selRs.map(function(r){return escHtml(r.name)+(r.speed?'（'+r.speed+'km/h）':'');}).join('、')+'</b>'+(selRs.length===1?((selRs[0].home?' · 家：'+escHtml(selRs[0].home):'')+(selRs[0].notes?' · 📝'+escHtml(selRs[0].notes):'')):''):'')
       +homeHint
       +(flex>0?'<br><span class="mid">⏱ 弹性 ±'+flex+' 分仅对库里无报单窗口的老点位生效（截止按 '+min2hm(winEndMin)+'+'+flex+' 算）；报单点的组头窗尾与备注截止是硬时限，不受弹性影响</span>':'')
       +(oneTripHint||'')
       +(forceSoloWarn?'<br><span class="mid">⚠️ 时间窗约束下无法完全满足单班上限，已按「时限优先」排出（超限趟已标注）</span>':'')
-      +(planParams.round?'<br>🔁 顺序班模式：送完回店再出发下一趟（一人多趟）'+(relaySched?'<br>🕐 <b>单人接力时刻表</b>：'+relaySched:''):'<br>🔀 并行班模式：各趟同时出发（多人各跑一条线）——<b>只有一名骑手？勾选「送完回店」改为单人接力</b>');
+      +(planParams.round?'<br>🔁 顺序班模式：送完回店再出发下一趟（一人多趟）'+(relaySched?'<br>🕐 <b>单人接力时刻表</b>：'+relaySched:''):'<br>🔀 并行班模式：各趟同时出发并已分派给勾选的骑手（趟多于骑手时按空闲接力）——<b>只勾一名骑手？会自动切「送完回店」单人接力</b>');
     pset(head
       +'<br>⚡ 闪送点对点参考合计 <b>'+totFlash+' 元</b>（餐均 '+(totFlash/Math.max(1,totMeals)).toFixed(1)+'元/餐；仅参考，不是向客户收的配送费）'
       +(warn?'<br>'+warn:'')
-      +(apiFail?'<br>⚠️ 高德API部分请求失败，失败段已按直线×1.35估算':'<br>📏 里程按高德骑行/步行路线实测，耗时按均速 '+speed+'km/h 折算')
+      +(assignNote?'<br>'+assignNote:'')
+      +(apiFail?'<br>⚠️ 高德API部分请求失败，失败段已按直线×1.35估算':'<br>📏 里程按高德骑行/步行路线实测，耗时按'+((selRs.length>1&&!planParams.round)?('各趟骑手速度（排线用均速 '+speed+'km/h）'):('均速 '+speed+'km/h'))+' 折算')
       +blocks.join(''));
     window._planning=false;
   })

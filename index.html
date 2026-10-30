@@ -1067,6 +1067,7 @@ document.getElementById('pmaxtrip').value=planParams.maxTrip||55;
 loadP2El();
 // ===== 骑手档案（v2.27）：按师傅各自速度/住址排线；顺序班末趟终点尽量近家，回程变下班路 =====
 var riders=[];try{riders=JSON.parse(localStorage.getItem('riders')||'[]');}catch(e){}
+riders=riders.filter(function(r){return r&&typeof r==='object'&&r.name;});   // 档案自愈：只剩名字的坏条目直接丢弃，避免速度取不到导致排线失真
 if(!riders.length){riders=[{name:'王师傅',home:'伏龙小区',pos:null,speed:28,notes:'道路骑行≈30km/h（10.15~10.20履约到达回归25段）；每点停留4~5分；排线参数用28保守'}];saveRiders();}
 function saveRiders(){try{localStorage.setItem('riders',JSON.stringify(riders));}catch(e){}}
 function riderByName(nm){for(var i=0;i<riders.length;i++)if(riders[i].name===nm)return riders[i];return null;}

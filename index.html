@@ -109,7 +109,7 @@ details.wk-drop[open]>summary{border-radius:12px 12px 4px 4px}
 </head>
 <body>
 <div class="panel">
-  <h3>🥗 壮壮FIT 配送助手 <span id="verTag" style="font-size:11px;color:#999;font-weight:normal">v2.48</span></h3>
+  <h3>🥗 壮壮FIT 配送助手 <span id="verTag" style="font-size:11px;color:#999;font-weight:normal">v2.49</span></h3>
   <div class="tabs">
     <button class="tabbtn on" id="tab-plan" type="button">🛵 排线</button>
     <button class="tabbtn" id="tab-cust" type="button">👥 客户</button>
@@ -541,7 +541,7 @@ function parseRptText(raw){
       continue;
     }
     if(!cur.user){
-      var fm=L.match(/^([\u4e00-\u9fa5][\u4e00-\u9fa5·]{1,5})\s+(1[3-9]\d{9})\s+(.{4,})$/);   // v2.48 兜底：报单直接一行「杨金鑫 13408092087 青度健身（香月湖店）」无前缀格式
+      var fm=L.match(/^([\u4e00-\u9fa5][\u4e00-\u9fa5·]{1,5})\s+(1[3-9]\d{9})\s+(.{4,})$/);   // v2.49 兜底：报单直接一行「杨金鑫 13408092087 青度健身（香月湖店）」无前缀格式
       if(fm){cur.user=fm[1];cur.phone=fm[2];cur.addr=fm[3];continue;}
     }
     if(!cur.user&&!/^[-—=]{3,}$/.test(L)) cur.dishes.push(L);
@@ -561,7 +561,7 @@ function parseRptText(raw){
     if(tms.length)o.dlMin=o.winE;
 o.dlMemo=parseDeadlineTime(o.memo||'')||parseDeadlineTime(o.note||'');   // 整单/本餐备注里的硬截止（如「12点之前送达」）；从严优先于组头窗尾
 if(o.dlMemo!=null){ o.dlMin=(o.dlMin!=null?Math.min(o.dlMin,o.dlMemo):o.dlMemo); }
-o.eaWanted=(function(s){   // v2.48 备注「不早于」诉求：希望X:XX送到/别太早 → 最早可送达；无时刻则按组头窗头；含「X点前」语义时归截止解析不作最早约束
+o.eaWanted=(function(s){   // v2.49 备注「不早于」诉求：希望X:XX送到/别太早 → 最早可送达；无时刻则按组头窗头；含「X点前」语义时归截止解析不作最早约束
 if(!s||s==='无')return null;
 if(!/希望|别太早|不要太早|不早于|别早于|凉了/.test(s))return null;
 if(/之前|以前|点前|前送/.test(s))return null;
@@ -1321,8 +1321,8 @@ savePlanParams();
 if(window.__rptBusy){ pset('⏳ <b>识别还在进行中</b>（新客地址定位需要几秒）——识别完成后会<b>自动点亮并排线</b>，不用手动点亮，请稍等几秒；若超过 1 分钟没动静，刷新页面重新识别一次'); return; }
 var live=todaySel.filter(function(i){return customers[i];});
 if(!live.length){ pset('<span class="mid">今天还没有有单地址。正常流程：粘报单 → 「🔍 识别报单」→ 识别完成后会<b>自动点亮老客、新客入库上地图并直接排线</b>，全程不用手动点亮。也可以去客户页手动点亮「有单」。</span>'); return; }
-var sessAuto='';   // v2.48 时段/窗口截止自动识别：组头窗尾=本时段收盘；午晚都有单则全时段一起排
-var oMeals={},oMealsS={},oDlmS={},oEaS={},oEaW={},oNamesS={},oHas={};   // v2.31 报单订单按「组头时段」分账：同一点位可能午晚各有报单（如烁屿前台3单分两波），本时段只吃本时段的截止与餐数；v2.48 oEaS 记本时段窗口起点（组头晚于本窗时作「最早可送达」）；v2.48 oEaW 记备注不早于
+var sessAuto='';   // v2.49 时段/窗口截止自动识别：组头窗尾=本时段收盘；午晚都有单则全时段一起排
+var oMeals={},oMealsS={},oDlmS={},oEaS={},oEaW={},oNamesS={},oHas={};   // v2.31 报单订单按「组头时段」分账：同一点位可能午晚各有报单（如烁屿前台3单分两波），本时段只吃本时段的截止与餐数；v2.49 oEaS 记本时段窗口起点（组头晚于本窗时作「最早可送达」）；v2.49 oEaW 记备注不早于
 var sessCnt={l:0,d:0},endBy={l:null,d:null};
 (window.__rptOrders||[]).forEach(function(o){
   if(!o.match||o.match.i==null)return;
@@ -1339,8 +1339,8 @@ var sessCnt={l:0,d:0},endBy={l:null,d:null};
   oMealsS[key]=(oMealsS[key]||0)+(o.meals||1);
   if(o.user){var na=oNamesS[key]||(oNamesS[key]=[]);if(na.indexOf(o.user)<0)na.push(o.user);}
   if(o.dlMin!=null&&(oDlmS[key]===undefined||o.dlMin<oDlmS[key]))oDlmS[key]=o.dlMin;
-  var ws=o.winS||0;if(ws&&(oEaS[key]===undefined||ws>oEaS[key]))oEaS[key]=ws;   // v2.48 组头窗口起点：晚于本窗收盘时生效为最早可送达
-var ew=o.eaWanted;if(ew==='winS')ew=o.winS||null;   // v2.48 备注不早于：无时刻按组头窗头，有时刻按备注时刻
+  var ws=o.winS||0;if(ws&&(oEaS[key]===undefined||ws>oEaS[key]))oEaS[key]=ws;   // v2.49 组头窗口起点：晚于本窗收盘时生效为最早可送达
+var ew=o.eaWanted;if(ew==='winS')ew=o.winS||null;   // v2.49 备注不早于：无时刻按组头窗头，有时刻按备注时刻
 if(ew!=null&&(oEaW[key]===undefined||ew>oEaW[key]))oEaW[key]=ew;
 });
 var sess=(sessCnt.l&&sessCnt.d)?'all':(sessCnt.d?'dinner':(sessCnt.l?'lunch':(planParams.session||'lunch')));
@@ -1351,7 +1351,7 @@ sessAuto='🧾 报单识别：'+(sess==='all'?('午窗 '+min2hm(lunchEnd)+' / �
   var prep=0, speed=+planParams.speed||20, maxTrip=+planParams.maxTrip||55;   // 准备固定 0 分；速度按勾选骑手自动取（多人取均速）
   var selRs0=selRiders();
   planParams.round=(selRs0.length===1&&riderRoundOf(selRs0[0]));   // 模式按本次回店勾选推导：单骑手且🔄回店=顺序接力；否则并行分派
-var flex=30;   // v2.48 弹性写死：窗口截止往后放宽 30 分（与客户约定的迟到容忍度共识）
+var flex=30;   // v2.49 弹性写死：窗口截止往后放宽 30 分（与客户约定的迟到容忍度共识）
   var ride=function(a,b){return km(a,b)*ROAD_K/speed*60;};
   // v2.27 骑手档案：末趟终点尽量近家（回程=下班路，不空跑）
   var rider=curRider();ensureRiderPos();
@@ -1378,8 +1378,8 @@ var dlm=((sess==='all')?((k.t==='d')?dinnerEnd:lunchEnd):winEndMin)+flex,ea=0,re
 if(hasThisSess){   // v2.31 午餐单不再拖死晚餐窗（截止/餐数按时段分开）；反向同理
   var key=sessKey+'@'+i;
   dlm=Math.min(dlm,oDlmS[key]!=null?oDlmS[key]:dlm);m=oMealsS[key];rep=1;
-  if(oEaW[key]!=null)ea=Math.max(ea,oEaW[key]);   // v2.48 备注明确「希望X:XX送到/别太早」：硬最早可送达
-else if(oEaS[key]>winEndMin)ea=oEaS[key];   // v2.48 组头窗口起点晚于本窗收盘（如午窗里挂「12:31-13:00」）：按最早可送达卡住，早送违约；正常窗内早到仍按老习惯放行
+  if(oEaW[key]!=null)ea=Math.max(ea,oEaW[key]);   // v2.49 备注明确「希望X:XX送到/别太早」：硬最早可送达
+else if(oEaS[key]>winEndMin)ea=oEaS[key];   // v2.49 组头窗口起点晚于本窗收盘（如午窗里挂「12:31-13:00」）：按最早可送达卡住，早送违约；正常窗内早到仍按老习惯放行
 }else if(rep){dlm=Math.min(dlm,k.dlM);}   // v2.30 报单点只卡截止（组头窗尾/备注从严），不再设「最早可送达」——历史实测早到 66~85 分客户均接受，早到风险由 50 分保温纪律兜底
 mainPts.push({k:k,dlm:dlm,m:m,ea:ea,rep:rep});
 });

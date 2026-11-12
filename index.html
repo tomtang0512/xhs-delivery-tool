@@ -109,7 +109,7 @@ details.wk-drop[open]>summary{border-radius:12px 12px 4px 4px}
 </head>
 <body>
 <div class="panel">
-  <h3>🥗 壮壮FIT 配送助手 <span id="verTag" style="font-size:11px;color:#999;font-weight:normal">v2.59</span></h3>
+  <h3>🥗 壮壮FIT 配送助手 <span id="verTag" style="font-size:11px;color:#999;font-weight:normal">v2.60</span></h3>
   <div class="tabs">
     <button class="tabbtn on" id="tab-plan" type="button">🛵 排线</button>
     <button class="tabbtn" id="tab-cust" type="button">👥 客户</button>
@@ -541,7 +541,7 @@ function parseRptText(raw){
       continue;
     }
     if(!cur.user){
-      var fm=L.match(/^([\u4e00-\u9fa5][\u4e00-\u9fa5·]{1,5})\s+(1[3-9]\d{9})\s+(.{4,})$/);   // v2.59 兜底：报单直接一行「杨金鑫 13408092087 青度健身（香月湖店）」无前缀格式
+      var fm=L.match(/^([\u4e00-\u9fa5][\u4e00-\u9fa5·]{1,5})\s+(1[3-9]\d{9})\s+(.{4,})$/);   // v2.60 兜底：报单直接一行「杨金鑫 13408092087 青度健身（香月湖店）」无前缀格式
       if(fm){cur.user=fm[1];cur.phone=fm[2];cur.addr=fm[3];continue;}
     }
     if(!cur.user&&!/^[-—=]{3,}$/.test(L)) cur.dishes.push(L);
@@ -561,7 +561,7 @@ function parseRptText(raw){
     if(tms.length)o.dlMin=o.winE;
 o.dlMemo=parseDeadlineTime(o.memo||'')||parseDeadlineTime(o.note||'');   // 整单/本餐备注里的硬截止（如「12点之前送达」）；从严优先于组头窗尾
 if(o.dlMemo!=null){ o.dlMin=(o.dlMin!=null?Math.min(o.dlMin,o.dlMemo):o.dlMemo); }
-o.eaWanted=(function(s){   // v2.59 备注「不早于」诉求：希望X:XX送到/别太早 → 最早可送达；无时刻则按组头窗头；含「X点前」语义时归截止解析不作最早约束
+o.eaWanted=(function(s){   // v2.60 备注「不早于」诉求：希望X:XX送到/别太早 → 最早可送达；无时刻则按组头窗头；含「X点前」语义时归截止解析不作最早约束
 if(!s||s==='无')return null;
 if(!/希望|别太早|不要太早|不早于|不要早于|别早于|凉了/.test(s))return null;
 if(/之前|以前|点前|前送/.test(s))return null;
@@ -1127,43 +1127,44 @@ TABS.forEach(function(t){document.getElementById('tab-'+t).addEventListener('cli
 document.getElementById('goCust').addEventListener('click',function(){showTab('cust');});
 // ===== 周报看板（懒加载 ECharts；每周只改 WK 对象里的数据）=====
 var WK={
-  range:'10.29 – 11.04',
+  range:'11.05 – 11.11',
   kpis:[
-    {label:'域外餐均配送费',value:'7.6',unit:'元/餐',delta:'WoW +0.1 元',warn:false},
-    {label:'集约配送餐均',value:'7.0',unit:'元/餐',delta:'WoW +0.8 元（谌师傅停用影响）',warn:false},
-    {label:'集约趟覆盖（师傅）',value:'78',unit:'%',delta:'70/90 餐 · 王谌两师傅，WoW +18pp',warn:false},
-    {label:'履约异常',value:'5',unit:'起5餐',delta:'最长晚14分（杨振/何小倩为第三方）· 0 客诉',warn:true}
+    {label:'域外餐均配送费',value:'7.35',unit:'元/餐',delta:'WoW -0.25 元',warn:false},
+    {label:'集约配送餐均',value:'7.0',unit:'元/餐',delta:'与上周持平',warn:false},
+    {label:'集约趟覆盖（师傅）',value:'72',unit:'%',delta:'79/110 餐 · 王周吕三师傅，WoW -6pp',warn:false},
+    {label:'履约异常',value:'12',unit:'起12餐',delta:'王7/吕3/第三方2，最长晚41分（小纸条11.11）· 许先生脏数据已剔',warn:true}
   ],
-  costDesc:'第三方 18 单占周成本 28.5%（WoW ↓20.8pp），餐均 10.9 元（WoW +0.4 元）',
-  dailyDesc:'全周 90 餐 685.6 元；绿=集约、黄=第三方散单，橙线=当日餐均配送费（当日总费用÷当日餐数）',
-  foot:'数据源：10.29-11.04 履约明细（邓馨玫 10.29 一单双碗计 2 餐）',
-  days:['10.29','10.30','10.31','11.01','11.02','11.03','11.04'],
-  orders:[19,13,2,1,19,21,15],          // 每日总餐数
-  tp:[1,3,1,1,5,6,1],                   // 每日第三方单量
-  fees:[110.8,126.0,19.5,11.3,135.6,178.4,104.0],  // 每日配送费
+  costDesc:'第三方 29 餐占周成本 31.6%（WoW +3.1pp），餐均 8.79 元（WoW -2.1 元）',
+  dailyDesc:'全周 110 餐 808.1 元；绿=集约、黄=第三方散单，橙线=当日餐均配送费（当日总费用÷当日餐数）',
+  foot:'数据源：11.05-11.11 履约明细（李店银泰城半伴健身一店 8 餐；许先生 11.05 到达时间为系统脏数据已剔除；蒋先生 11.09 到达时间异常提前 323 分；11.11 趟编号系统口径为 1112 前缀）',
+  days:['11.05','11.06','11.07','11.08','11.09','11.10','11.11'],
+  orders:[14,15,3,2,32,25,19],          // 每日总餐数
+  tp:[3,2,3,2,11,5,3],                   // 每日第三方单量
+  fees:[107.9,98.9,32.6,40.6,193.3,182.9,151.9],  // 每日配送费
   cost:[                                // 成本结构（元）
-    {name:'王师傅 60餐',v:390,c:'#2e9e6b'},
-    {name:'第三方 18餐',v:195.6,c:'#e6a23c'},
-    {name:'谌师傅 10餐',v:100,c:'#e87ea1'},
+    {name:'王师傅 67餐',v:446.1,c:'#2e9e6b'},
+    {name:'第三方 29餐',v:255.0,c:'#e6a23c'},
+    {name:'周师傅 8餐',v:72,c:'#e87ea1'},
+    {name:'吕师傅 4餐',v:35,c:'#4a9d8e'},
     {name:'自配 2餐(0元)',v:0.001,c:'#c8d6cf'}
   ],
 trips:[   // 每趟集约装载：lbl=轴标签 n=餐数 min=趟时长(分) dep/arr=出发到达 rider=骑手 seg=午/晚 pts=1km聚类后点位数
-{lbl:'周四①',n:7,min:71,dep:'11:00',arr:'12:11',rider:'王师傅',seg:'午',pts:4},
-{lbl:'周四②',n:3,min:42,dep:'11:15',arr:'11:57',rider:'谌师傅',seg:'午',pts:3},
-{lbl:'周四③',n:7,min:40,dep:'16:20',arr:'17:00',rider:'王师傅',seg:'晚',pts:3},
-{lbl:'周四④',n:1,min:15,dep:'18:30',arr:'18:45',rider:'自配',seg:'晚',pts:1},
-{lbl:'周五①',n:4,min:40,dep:'11:00',arr:'11:40',rider:'王师傅',seg:'午',pts:3},
-{lbl:'周五②',n:3,min:56,dep:'11:00',arr:'11:56',rider:'谌师傅',seg:'午',pts:3},
-{lbl:'周五③',n:3,min:76,dep:'17:00',arr:'18:16',rider:'谌师傅',seg:'晚',pts:2},
-{lbl:'周六①',n:1,min:30,dep:'11:00',arr:'11:30',rider:'谌师傅',seg:'午',pts:1},
-{lbl:'周一①',n:6,min:77,dep:'11:00',arr:'12:17',rider:'王师傅',seg:'午',pts:3},
-{lbl:'周一②',n:1,min:30,dep:'11:30',arr:'12:00',rider:'自配',seg:'午',pts:1},
-{lbl:'周一③',n:7,min:59,dep:'16:30',arr:'17:29',rider:'王师傅',seg:'晚',pts:4},
-{lbl:'周二①',n:7,min:78,dep:'11:00',arr:'12:18',rider:'王师傅',seg:'午',pts:5},
-{lbl:'周二②',n:5,min:51,dep:'16:20',arr:'17:11',rider:'王师傅',seg:'晚',pts:5},
-{lbl:'周二③',n:3,min:36,dep:'17:45',arr:'18:21',rider:'王师傅',seg:'晚',pts:3},
-{lbl:'周三①',n:7,min:77,dep:'10:45',arr:'12:02',rider:'王师傅',seg:'午',pts:6},
-{lbl:'周三②',n:7,min:35,dep:'16:50',arr:'17:25',rider:'王师傅',seg:'晚',pts:3}
+{lbl:'周四①',n:5,min:59,dep:'11:20',arr:'12:19',rider:'王师傅',seg:'午',pts:4},
+{lbl:'周四②',n:6,min:50,dep:'16:41',arr:'17:31',rider:'王师傅',seg:'晚',pts:3},
+{lbl:'周五①',n:7,min:68,dep:'11:15',arr:'12:23',rider:'王师傅',seg:'午',pts:5},
+{lbl:'周五②',n:6,min:58,dep:'16:45',arr:'17:43',rider:'王师傅',seg:'晚',pts:3},
+{lbl:'周一①',n:8,min:54,dep:'11:10',arr:'12:04',rider:'王师傅',seg:'午',pts:6},
+{lbl:'周一②',n:4,min:91,dep:'11:20',arr:'12:51',rider:'吕师傅',seg:'午',pts:4},
+{lbl:'周一③',n:1,min:16,dep:'11:21',arr:'11:37',rider:'王师傅',seg:'午',pts:1},
+{lbl:'周一④',n:2,min:15,dep:'12:30',arr:'12:45',rider:'王师傅',seg:'午',pts:1},
+{lbl:'周一⑤',n:6,min:73,dep:'16:40',arr:'17:53',rider:'王师傅',seg:'晚',pts:4},
+{lbl:'周二①',n:10,min:68,dep:'11:05',arr:'12:13',rider:'王师傅',seg:'午',pts:7},
+{lbl:'周二②',n:4,min:61,dep:'11:20',arr:'12:21',rider:'周师傅',seg:'午',pts:4},
+{lbl:'周二③',n:6,min:56,dep:'16:20',arr:'17:16',rider:'王师傅',seg:'晚',pts:5},
+{lbl:'周三①',n:6,min:56,dep:'11:05',arr:'12:01',rider:'王师傅',seg:'午',pts:5},
+{lbl:'周三②',n:4,min:41,dep:'11:15',arr:'11:56',rider:'周师傅',seg:'午',pts:3},
+{lbl:'周三③',n:2,min:0,dep:'11:15',arr:'',rider:'自配',seg:'午',pts:1},
+{lbl:'周三④',n:4,min:48,dep:'16:40',arr:'17:28',rider:'王师傅',seg:'晚',pts:3}
   ]
 };
 function wkLoadEcharts(cb){
@@ -1222,12 +1223,12 @@ function wkRender(){
   function avg(a,f){return Math.round(a.reduce(function(s,x){return s+f(x);},0)/a.length*10)/10;}
   var midT=rid.filter(function(t){return t.seg==='午';}),evT=rid.filter(function(t){return t.seg==='晚';});
   document.getElementById('wk-tripdesc').innerHTML=
-    '单趟装载上限 <b>'+maxN+' 餐</b>（'+maxT.lbl.replace(/[①②③④]/,'')+' '+({'周四':'10.29','周五':'10.30','周六':'10.31','周日':'11.01','周一':'11.02','周二':'11.03','周三':'11.04'}[maxT.lbl.slice(0,2)]||'')+' · '+maxT.rider+'，'+maxT.min+' 分）｜'
+    '单趟装载上限 <b>'+maxN+' 餐</b>（'+maxT.lbl.replace(/[①②③④⑤]/,'')+' '+({'周四':'11.05','周五':'11.06','周六':'11.07','周日':'11.08','周一':'11.09','周二':'11.10','周三':'11.11'}[maxT.lbl.slice(0,2)]||'')+' · '+maxT.rider+'，'+maxT.min+' 分）｜'
    +'午趟均 '+avg(midT,function(t){return t.n;})+' 餐 / 单趟约 '+avg(midT,function(t){return t.min;})+' 分｜'
    +'晚趟均 '+avg(evT,function(t){return t.n;})+' 餐 / 单趟约 '+avg(evT,function(t){return t.min;})+' 分｜'
    +'趟均覆盖 <b>'+avg(rid,function(t){return t.pts;})+'</b> 个点位（1km 内并计），每点位带 '
-   +Math.round(rid.reduce(function(s,t){return s+t.n;},0)/rid.reduce(function(s,t){return s+t.pts;},0)*10)/10+' 餐（自配不计）｜柱色：绿=王师傅、粉=谌师傅、灰=自配，同色分段以白色虚线分隔';
-  var dayMap={'周四':'10.29','周五':'10.30','周六':'10.31','周日':'11.01','周一':'11.02','周二':'11.03','周三':'11.04'};
+   +Math.round(rid.reduce(function(s,t){return s+t.n;},0)/rid.reduce(function(s,t){return s+t.pts;},0)*10)/10+' 餐（自配不计）｜柱色：绿=王师傅、粉=周师傅、青=吕师傅、灰=自配，同色分段以白色虚线分隔';
+  var dayMap={'周四':'11.05','周五':'11.06','周六':'11.07','周日':'11.08','周一':'11.09','周二':'11.10','周三':'11.11'};
   var dayOrd=['周四','周五','周六','周日','周一','周二','周三'];
   var days=dayOrd.map(function(k){
     var ts=trips.filter(function(t){return t.lbl.indexOf(k)===0;});
@@ -1243,9 +1244,9 @@ function wkRender(){
     return trips.filter(function(t){return t.lbl.indexOf(k)===0;})
       .sort(function(a,b){return a.dep.localeCompare(b.dep);});
   });
-  var RCOLOR={'王师傅':'#2e9e6b','谌师傅':'#e87ea1','自配':'#c8d6cf'};
+  var RCOLOR={'王师傅':'#2e9e6b','周师傅':'#e87ea1','谌师傅':'#e87ea1','吕师傅':'#4a9d8e','自配':'#c8d6cf'};
   var tripSeries=[];
-  for(var j=0;j<4;j++){
+  for(var j=0;j<5;j++){
     tripSeries.push({name:'第'+(j+1)+'趟',type:'bar',stack:'t',barWidth:26,
       data:tripSegs.map(function(ts,idx){
         var t=ts[j]; if(!t)return null;
@@ -1351,8 +1352,8 @@ savePlanParams();
 if(window.__rptBusy){ pset('⏳ <b>识别还在进行中</b>（新客地址定位需要几秒）——识别完成后会<b>自动点亮并排线</b>，不用手动点亮，请稍等几秒；若超过 1 分钟没动静，刷新页面重新识别一次'); return; }
 var live=todaySel.filter(function(i){return customers[i];});
 if(!live.length){ pset('<span class="mid">今天还没有有单地址。正常流程：粘报单 → 「🔍 识别报单」→ 识别完成后会<b>自动点亮老客、新客入库上地图并直接排线</b>，全程不用手动点亮。也可以去客户页手动点亮「有单」。</span>'); return; }
-var sessAuto='';   // v2.59 时段/窗口截止自动识别：组头窗尾=本时段收盘；午晚都有单则全时段一起排
-var oMeals={},oMealsS={},oDlmS={},oEaS={},oEaW={},oNamesS={},oHas={};   // v2.31 报单订单按「组头时段」分账：同一点位可能午晚各有报单（如烁屿前台3单分两波），本时段只吃本时段的截止与餐数；v2.59 oEaS 记本时段窗口起点（组头晚于本窗时作「最早可送达」）；v2.59 oEaW 记备注不早于
+var sessAuto='';   // v2.60 时段/窗口截止自动识别：组头窗尾=本时段收盘；午晚都有单则全时段一起排
+var oMeals={},oMealsS={},oDlmS={},oEaS={},oEaW={},oNamesS={},oHas={};   // v2.31 报单订单按「组头时段」分账：同一点位可能午晚各有报单（如烁屿前台3单分两波），本时段只吃本时段的截止与餐数；v2.60 oEaS 记本时段窗口起点（组头晚于本窗时作「最早可送达」）；v2.60 oEaW 记备注不早于
 var sessCnt={l:0,d:0},endBy={l:null,d:null};
 (window.__rptOrders||[]).forEach(function(o){
   if(!o.match||o.match.i==null)return;
@@ -1369,8 +1370,8 @@ var sessCnt={l:0,d:0},endBy={l:null,d:null};
   oMealsS[key]=(oMealsS[key]||0)+(o.meals||1);
   if(o.user){var na=oNamesS[key]||(oNamesS[key]=[]);if(na.indexOf(o.user)<0)na.push(o.user);}
   if(o.dlMin!=null&&(oDlmS[key]===undefined||o.dlMin<oDlmS[key]))oDlmS[key]=o.dlMin;
-  var ws=o.winS||0;if(ws&&(oEaS[key]===undefined||ws>oEaS[key]))oEaS[key]=ws;   // v2.59 组头窗口起点：晚于本窗收盘时生效为最早可送达
-var ew=o.eaWanted;if(ew==='winS')ew=o.winS||null;   // v2.59 备注不早于：无时刻按组头窗头，有时刻按备注时刻
+  var ws=o.winS||0;if(ws&&(oEaS[key]===undefined||ws>oEaS[key]))oEaS[key]=ws;   // v2.60 组头窗口起点：晚于本窗收盘时生效为最早可送达
+var ew=o.eaWanted;if(ew==='winS')ew=o.winS||null;   // v2.60 备注不早于：无时刻按组头窗头，有时刻按备注时刻
 if(ew!=null&&(oEaW[key]===undefined||ew>oEaW[key]))oEaW[key]=ew;
 });
 var sess=(sessCnt.l&&sessCnt.d)?'all':(sessCnt.d?'dinner':(sessCnt.l?'lunch':(planParams.session||'lunch')));
@@ -1381,7 +1382,7 @@ sessAuto='🧾 报单识别：'+(sess==='all'?('午窗 '+min2hm(lunchEnd)+' / �
   var prep=0, speed=+planParams.speed||20, maxTrip=+planParams.maxTrip||55;   // 准备固定 0 分；速度按勾选骑手自动取（多人取均速）
   var selRs0=selRiders();
   planParams.round=(selRs0.length===1&&riderRoundOf(selRs0[0]));   // 模式按本次回店勾选推导：单骑手且🔄回店=顺序接力；否则并行分派
-var flex=30;   // v2.59 弹性写死：窗口截止往后放宽 30 分（与客户约定的迟到容忍度共识）
+var flex=30;   // v2.60 弹性写死：窗口截止往后放宽 30 分（与客户约定的迟到容忍度共识）
   var ride=function(a,b){return km(a,b)*ROAD_K/speed*60;};
   // v2.27 骑手档案：末趟终点尽量近家（回程=下班路，不空跑）
   var rider=curRider();ensureRiderPos();
@@ -1408,8 +1409,8 @@ var dlm=((sess==='all')?((k.t==='d')?dinnerEnd:lunchEnd):winEndMin)+flex,ea=0,re
 if(hasThisSess){   // v2.31 午餐单不再拖死晚餐窗（截止/餐数按时段分开）；反向同理
   var key=sessKey+'@'+i;
   dlm=Math.min(dlm,oDlmS[key]!=null?oDlmS[key]:dlm);m=oMealsS[key];rep=1;
-  if(oEaW[key]!=null)ea=Math.max(ea,oEaW[key]);   // v2.59 备注明确「希望X:XX送到/别太早」：硬最早可送达
-else if(oEaS[key]>winEndMin)ea=oEaS[key];   // v2.59 组头窗口起点晚于本窗收盘（如午窗里挂「12:31-13:00」）：按最早可送达卡住，早送违约；正常窗内早到仍按老习惯放行
+  if(oEaW[key]!=null)ea=Math.max(ea,oEaW[key]);   // v2.60 备注明确「希望X:XX送到/别太早」：硬最早可送达
+else if(oEaS[key]>winEndMin)ea=oEaS[key];   // v2.60 组头窗口起点晚于本窗收盘（如午窗里挂「12:31-13:00」）：按最早可送达卡住，早送违约；正常窗内早到仍按老习惯放行
 }else if(rep){dlm=Math.min(dlm,k.dlM);}   // v2.30 报单点只卡截止（组头窗尾/备注从严），不再设「最早可送达」——历史实测早到 66~85 分客户均接受，早到风险由 50 分保温纪律兜底
 mainPts.push({k:k,dlm:dlm,m:m,ea:ea,rep:rep});
 });

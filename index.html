@@ -225,8 +225,11 @@
   <!-- ===================== 客户管理 ===================== -->
   <div class="tabpane" id="pane-cust">
     <div class="card">
-      <div class="step"><span class="no">👥</span><b>客户档案</b><span class="tip">共 <span id="cnum">0</span> 家｜分层热力地图看「<a href="customers.html" style="color:var(--g)">客户档案页 →</a>」</span></div>
-      <div id="clist" class="clist"></div>
+      <div class="step"><span class="no">👥</span><b>客户档案</b><span class="tip">共 <span id="cnum">0</span> 家｜地图上点位=客户，颜色=近期活跃度；下「编辑/删除/批量」可管理</span></div>
+      <iframe id="custMap" src="customers.html" title="客户分层地图" loading="lazy" style="width:100%;height:540px;border:1px solid var(--line);border-radius:12px;background:#f4f6f5;display:block;margin:6px 0 4px"></iframe>
+      <details id="clistDrop" style="margin-top:4px">
+        <summary style="cursor:pointer;font-weight:bold;color:var(--g);padding:6px 2px">✏️ 展开客户列表（编辑 / 删除 / 批量管理）</summary>
+      <div id="clist" class="clist" style="margin-top:6px"></div>
       <div class="addrow"><input id="cname" placeholder="客户名" style="width:80px"><input id="caddr" placeholder="地址，如：天府三街199号" style="flex:1;min-width:160px"><button class="btn-line" id="cadd">添加</button></div>
       <div class="addrow">
         <select id="ctime" style="flex:1">
@@ -253,6 +256,7 @@
         <textarea placeholder="每行一个客户：名称 地址（逗号/顿号/空格分隔均可）&#10;例：&#10;张三 天府三街199号&#10;李四，凯旋南城B座1608室&#10;（误粘报单原文也不怕：电话/菜品/统计行会自动跳过）"></textarea>
         <div class="addrow"><button class="btn-line" id="bgo">开始导入</button><button class="btn-ghost" id="bcancel">收起</button></div>
       </div>
+      </details>
     </div>
   </div>
 

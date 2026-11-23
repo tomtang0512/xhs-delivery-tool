@@ -412,6 +412,7 @@ if(!sel.length){toast('没有勾选的订单');return;}
 _rowsForReplan=sel;
 runPlan(sel);
 };
+loadBc();
 
 /* ===== 4. 排线算法（内核移植自 v2.66，逻辑不变） ===== */
 var planOut=null;
@@ -1066,7 +1067,7 @@ function renderResult(){
       else if(eGap>EARLY_TOL){mark=' <span style="color:#d9a441">🕐 早到'+eGap+'分'+(g.okE!=null?'·已确认':'·<b>待你确认</b>')+'</span>';
         if(g.okE==null)asks.push({key:tr.sess+'|'+glabelOf(g),nm:(tr.sess==='d'?'晚窗':'午窗')+' '+glabelOf(g),kind:'e',gap:eGap,disp:'早到 '+eGap+' 分',plan:min2hm(eta.t),ref:'最早可送 '+min2hm(g.lo)});}
       var ets=eta.t<=g.dlm?('✓ 剩'+left+'分'):('⚠️ 晚'+lGap+'分');
-      return '<tr><td class="seq">'+(q+1)+'</td><td><b>'+escHtml(glabelOf(g))+'</b>'
+      return '<tr><td class="seq">'+(q+1)+'</td><td><b>'+escHtml(glabelOf(g))+'</b>'+bcMark(g.names)
         +(g.names.length>1?'<span class="mut">（同址并点 '+g.names.length+' 户）</span>':'')
         +'<br><span class="mut">'+escHtml(g.names[0].addr||'')+'</span>'+mark+'</td>'
         +'<td style="text-align:center;white-space:nowrap">'+g.meals+'餐</td>'
@@ -1111,6 +1112,33 @@ function renderResult(){
   renderRef();
   showMap(-1);
   function glabelOf(g){return g.names.map(function(m){return m.name;}).join('+');}
+}
+
+/* ===== 客诉联动（badcase-tracker 云端 data.json，仅匹配填了客户名的记录） ===== */
+var BC_URL='https://tomtang0512.github.io/badcase-tracker/data.json';
+var bcMap={};   // 客户名 -> {n, last, tps:[]}
+function loadBc(){
+  fetch(BC_URL+'?t='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.json():null;}).then(function(d){
+    if(!d||!Array.isArray(d.records))return;
+    bcMap={};
+    d.records.forEach(function(rc){
+      var nm=String(rc.customerName||'').trim();if(!nm)return;
+      var b=bcMap[nm]||(bcMap[nm]={n:0,last:'',tps:[]});
+      b.n++;
+      if(String(rc.date||'')>b.last)b.last=String(rc.date||'');
+      var t=String(rc.type||'').split('·').pop().trim();if(t&&b.tps.indexOf(t)<0)b.tps.push(t);
+    });
+    if(planOut)renderResult();   // 已有排线结果时重渲染补风险标
+  }).catch(function(){});
+}
+function bcMark(names){
+  var hits=[],n=0;
+  (names||[]).forEach(function(m){var b=bcMap[m.name];if(b){hits.push({nm:m.name,b:b});n+=b.n;}});
+  if(!hits.length)return '';
+  var tt='客诉史（仅统计填了客户名的记录）：'+hits.map(function(h){
+    return h.nm+' '+h.b.n+'次（最近'+h.b.last.slice(5)+' '+h.b.tps.slice(0,3).join('/')+'）';
+  }).join('；');
+  return ' <span style="color:#e4572e;font-weight:bold" title="'+escHtml(tt)+'">🔥 重点核对</span>';
 }
 function tripCopyText(ti){
   var P=planOut,tr=P.trips[ti],v=tr._v;

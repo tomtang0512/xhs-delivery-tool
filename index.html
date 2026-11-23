@@ -127,7 +127,9 @@
   details.ref summary{cursor:pointer;font-size:13px;color:var(--mut)}
   details.ref .body{font-size:12px;color:#55655e;line-height:1.9;padding:6px 2px}
   /* 参数 */
-  .params{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:13px}
+  .params{display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:13px}
+.params .srow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;width:100%;margin:2px 0}
+.params .rlab{color:var(--mut);font-size:12px}
   .params input[type=time]{border:1px solid var(--line);border-radius:6px;padding:3px 6px;font-size:13px}
   .rchip{display:inline-flex;align-items:center;gap:3px;border:1px solid var(--line);border-radius:14px;padding:3px 9px;font-size:12px;cursor:pointer;user-select:none}
   .rchip.on{border-color:var(--g2);background:#e7f5ee;color:var(--g);font-weight:bold}
@@ -171,18 +173,15 @@
   <!-- 参数（常显：解析前后都能改出发/骑手） -->
   <div class="card" id="paramCard">
     <div class="params">
-      <span class="sessBadge" id="sessBadge"></span>
-      <label title="午窗（午餐）出发时刻">🌞午 <input type="time" id="depart" value="10:55"></label>
-<label title="晚窗（晚餐）出发时刻">🌙晚 <input type="time" id="departD" value="16:55"></label>
-      <span title="勾多位=并行同发（一人一趟），只勾1位=接力顺序班（仅管午窗）">🌞午骑手 <span id="riderBox" class="row" style="gap:5px"></span></span>
-<span title="晚窗骑手单独勾选：勾多位=并行同发，只勾1位=接力">🌙晚骑手 <span id="riderBoxD" class="row" style="gap:5px"></span></span>
-      <details style="margin-left:auto"><summary class="mut" style="cursor:pointer">高级参数</summary>
+      <div class="srow"><span class="sessBadge" id="sessBadge"></span><details style="margin-left:auto"><summary class="mut" style="cursor:pointer">高级参数</summary>
         <div class="row" style="margin-top:6px">
           <label>单班上限 <input type="number" id="maxTrip" value="90" min="15" max="180" style="width:52px;border:1px solid var(--line);border-radius:6px;padding:2px 4px">分</label>
           <label>均速 <input type="number" id="speed" value="20" min="10" max="45" style="width:52px;border:1px solid var(--line);border-radius:6px;padding:2px 4px">km/h</label>
           <span class="mut">弹性固定±30分 · 保温90分 · 早到≤15分自动放行；早到超出/迟到≤15分排线时问你；迟到>15分禁止 · 同址100m内自动并点</span>
         </div>
       </details>
+      <div class="srow"><label title="午窗（午餐）出发时刻">🌞午 <input type="time" id="depart" value="10:55"></label><span class="rlab" title="勾多位=并行同发（一人一趟），只勾1位=接力顺序班（仅管午窗）">骑手</span><span id="riderBox" style="display:inline-flex;gap:5px;flex-wrap:wrap"></span></div>
+      <div class="srow"><label title="晚窗（晚餐）出发时刻">🌙晚 <input type="time" id="departD" value="16:55"></label><span class="rlab" title="晚窗骑手单独勾选：勾多位=并行同发，只勾1位=接力">骑手</span><span id="riderBoxD" style="display:inline-flex;gap:5px;flex-wrap:wrap"></span></div>
     </div>
   </div>
 

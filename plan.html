@@ -214,13 +214,18 @@ function parseRptText(raw){
       continue;
     }
     if(!cur.user){var fm=L.match(/^([\u4e00-\u9fa5][\u4e00-\u9fa5·]{1,5})\s+(1[3-9]\d{9})\s+(.{4,})$/);if(fm){cur.user=fm[1];cur.phone=fm[2];cur.addr=fm[3];continue;}}
+    if(!cur.user){var fm2=L.match(/^([\u4e00-\u9fa5A-Za-z·]{1,10})\s*[:：]\s*(1[3-9]\d{9})\s*$/);if(fm2){cur.user=fm2[1];cur.phone=fm2[2];cur._needAddr=true;continue;}}   // 「大卫：18982405005」冒号格式：只认名字+手机，下一行补地址
+    if(cur._needAddr&&!cur.addr){cur.addr=L;cur._needAddr=false;continue;}
     if(!cur.user&&!/^[-—=]{3,}$/.test(L))cur.dishes.push(L);
   }
   push();
   orders.forEach(function(o){
     var tM=(o.tag||'').match(/(\d+)\s*餐/);
     if(tM)o.meals=+tM[1];
-    else{var nC=0;o.dishes.forEach(function(d){var c=d.match(/[①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮]/g);if(c&&c.length>nC)nC=c.length;});o.meals=nC>0?nC:1;}
+    else{var nC=0;o.dishes.forEach(function(d){var c=d.match(/[①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮]/g);if(c&&c.length>nC)nC=c.length;});
+      if(nC===0&&o.dishes.length>1){var nD=0;o.dishes.forEach(function(d){if(/(碗|三拼|双拼|锅|蛋白|pro|easy)/i.test(d))nD++;});if(nD>1)nC=nD;}   // 多行菜名无①②序号：按整菜行数估餐数
+      o.meals=nC>0?nC:1;}
+    if(!o.addr&&o.dishes.length>1){var ld=o.dishes[o.dishes.length-1];if(ld.length<=12&&!/[:：]/.test(ld)){o.addr=ld;o.dishes.pop();}}   // 「大卫：电话」后下一行是地点：补成地址
     var tms=[],tre=/((\d{1,2})\s*[:：]\s*(\d{2}))/g,tm2;
     while((tm2=tre.exec(o.group||'')))tms.push((+tm2[2])*60+(+tm2[3]));
     if(tms.length>=2){o.winS=tms[0];o.winE=tms[tms.length-1];}
@@ -298,10 +303,11 @@ document.getElementById('btnParse').onclick=function(){
     var mc=(!sp&&o.user)?matchCustIdx(o.user,o.addr):null;
     return {no:o.no,user:o.user||'',addr:o.addr||'',meals:o.meals,winS:o.winS,winE:o.winE,
             dlMin:o.dlMin,dlMemo:o.dlMemo,eaWanted:o.eaWanted,group:o.group,st:st,sp:sp,
-            match:mc,pos:(!sp&&mc?[(mc.c.lng||0),(mc.c.lat||0)]:null),checked:true,fail:false};
+            match:mc,pos:(!sp&&mc&&mc.c.lng!=null&&mc.c.lat!=null?[mc.c.lng,mc.c.lat]:null),checked:true,fail:false};
   });
   // 新客定位（REST，串行；自提单除外）
-  var needGeo=rptRows.filter(function(r){return !r.match&&!r.sp;});
+    // 需定位：无匹配档案的新客 + 档案缺坐标的老客（严禁拿 [0,0] 参与排线）
+var needGeo=rptRows.filter(function(r){return !r.sp&&!r.pos;});
   document.getElementById('parseStat').textContent='识别 '+rptRows.length+' 单：老客 '+(rptRows.length-needGeo.length)+' · 新客待定位 '+needGeo.length+' …';
   (function nextGeo(k){
     if(k>=needGeo.length){afterParse();return;}
@@ -364,7 +370,7 @@ function renderConfirm(){
         +'<label><input type="radio" name="c'+idx+'" checked> '+escHtml(r.match.c.name+'（'+r.match.c.addr+'）')+'</label>'
         +r.match.alts.filter(function(x){return x.i!==r.match.i;}).map(function(x){return '<label><input type="radio" name="c'+idx+'"> '+escHtml(x.c.name+'（'+x.c.addr+'）')+'</label>';}).join('')
         +'<label><input type="radio" name="c'+idx+'"> 都不是（按新客排）</label></div>';
-    }else if(r.match){chip='<span class="chip ok">老客·'+escHtml(r.match.c.name)+'·沿用档案坐标</span>';
+    }else if(r.match){chip='<span class="chip ok">老客·'+escHtml(r.match.c.name)+'·'+((r.match.c.lng==null||r.match.c.lat==null)?'档案缺坐标·已重新定位':'沿用档案坐标')+'</span>';
       if(r.match.c.cx==='hard')chip+='<span class="chip amb">电梯难等·停'+CX_MIN.hard+'分</span>';
       else if(r.match.c.cx==='easy')chip+='<span class="chip ok">好送·停'+CX_MIN.easy+'分</span>';}
     else if(r.fail){chip='<span class="chip fail">定位失败</span>';cands='<div class="cands"><b>为什么问你：</b>高德没定位上这个地址（多半是新客或地址写得不完整）：可改写报单地址后重新解析，或取消勾选该单</div>';}
@@ -471,7 +477,7 @@ var departD=document.getElementById('departD').value||'16:55';  // 晚窗出发�
     if(oEaW[key2]!=null)ea=Math.max(ea,oEaW[key2]);  // 备注「不早于/希望X送到」
     var cxMax='normal',cxOrder={easy:0,normal:1,hard:2};   // 组内取最难：交接停留按最难点的档计（电梯难等会拉长全程，必须计入才能保证不超时）
     rs2.forEach(function(r){var c=(r.cx||(r.match&&r.match.c&&r.match.c.cx)||'normal');if(cxOrder[c]!=null&&cxOrder[c]>cxOrder[cxMax])cxMax=c;});
-    mainPts.push({name:(oNames[key2]?oNames[key2].join('+'):(head.user||head.addr)),
+    mainPts.push({name:(function(){var ns=(oNames[key2]||[]).filter(function(x){return x&&String(x).trim();});return ns.length?ns.join('+'):(head.user||head.addr||('#'+head.no+'单'));})(),
       addr:head.addr,pos:head.pos,
       dlm:dlm,ea:ea,m:m,min:CX_MIN[cxMax],cx:cxMax,st:st});
   });
@@ -513,7 +519,7 @@ return list;}
   var tight=tightPass();
   if(tight.length){var snapDep=1e9;tight.forEach(function(w){if(w.latest<snapDep)snapDep=w.latest;});
     if(snapDep>0&&snapDep>=departMin-15){tight.forEach(function(w){groups.push(w.g);});departMin=Math.floor(snapDep);if(writeInput)document.getElementById(sk==='d'?'departD':'depart').value=min2hm(departMin);tight=tightPass();}}
-  tight.forEach(function(w){risks.push({lv:'r',txt:'<b>#'+escHtml(glabel(w.g))+'</b>（'+(sk==='d'?'晚窗':'午窗')+'）时限 '+min2hm(w.g.dlm)+' 来不及：需最晚 <b>'+min2hm(w.latest)+'</b> 出发 —— 建议单独提前送/自送/与客户改约'});});
+  tight.forEach(function(w){var lt=(isFinite(w.latest)&&w.latest>0)?min2hm(w.latest):'——';risks.push({lv:'r',txt:'<b>#'+escHtml(glabel(w.g))+'</b>（'+(sk==='d'?'晚窗':'午窗')+'）时限 '+min2hm(w.g.dlm)+' 来不及：需最晚 <b>'+lt+'</b> 出发 —— 建议单独提前送/自送/与客户改约'});});
   excluded.forEach(function(r){risks.push({lv:'y',txt:'#'+r.no+' '+escHtml(r.user)+' 在另一时段，本次未排（午/晚分窗各跑一次）'});});
   var n=groups.length;
   if(!n){done(null);return;}

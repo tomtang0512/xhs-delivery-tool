@@ -219,6 +219,10 @@
         <label>希望送达 <input type="time" id="stime" value="11:30"></label>
       </div>
     </div>
+    <div class="card">
+      <div class="step"><span class="no">🗺</span><b>点位地图</b><span class="tip">🔴虚线=12km 上限圈（超圈不送）· 🟢虚线=8km 免运费圈 · 绿点=近7天活跃户（橙圈=能并线的）· 📍=新点</span></div>
+      <div id="judgeMap" style="height:400px;border-radius:10px;border:1px solid var(--line)"></div>
+    </div>
     <div class="card jres" id="jres">等待输入…</div>
     <div class="card" style="padding:8px 12px"><div class="mut" style="margin-bottom:2px"><b>最近判断</b></div><div class="hist" id="hist"></div></div>
   </div>
@@ -304,6 +308,7 @@
 </div>
 <div class="toast" id="toast"></div>
 
+<script src="https://webapi.amap.com/maps?v=1.4.15&key=e9973067b859c02990c6b19729ffdce7"></script>
 <script src="delivery-seed.js"></script>
 <script>
 /* ============================================================
@@ -1492,6 +1497,7 @@ function showTab(id){
     document.getElementById('tab-'+t).classList.toggle('on',t===id);
   });
   if(id==='week'&&window.__wkCharts){setTimeout(function(){window.__wkCharts.forEach(function(c){c.resize();});},60);}
+  if(id==='judge'){setTimeout(judgeMapInit,80);}   // 页签显示后再初始化地图（display:none 时 AMap 会算成 0 尺寸）
   window.scrollTo(0,0);
 }
 TABS.forEach(function(t){document.getElementById('tab-'+t).addEventListener('click',function(){showTab(t);});});
@@ -1560,10 +1566,38 @@ function tripChance(p,winNew){
   near.sort(function(a,b){return a.d-b.d;});
   function nm(x,n){return x.slice(0,n||3).join('、')+(x.length>(n||3)?' 等':'');}
   if(onway.length>=2||(near.length&&near[0].d<=0.6))
-    return {s:'high',txt:'🚗 成趟几率：<b>高</b> —— '+label+'中有 '+onway.length+' 家顺路'+(near.length?'、最近 '+near[0].name+' 仅 '+near[0].d.toFixed(1)+'km':'')+'（'+nm(onway.concat(near.map(function(x){return x.name;})))+'），大概率拼趟'};
+    return {s:'high',txt:'🚗 成趟几率：<b>高</b> —— '+label+'中有 '+onway.length+' 家顺路'+(near.length?'、最近 '+near[0].name+' 仅 '+near[0].d.toFixed(1)+'km':'')+'（'+nm(onway.concat(near.map(function(x){return x.name;})))+'），大概率拼趟',onway:onway,near:near};
   if(onway.length===1||near.length)
-    return {s:'mid',txt:'🚗 成趟几率：<b>中</b> —— '+(onway.length?'顺路：'+nm(onway):'周边 '+near[0].d.toFixed(1)+'km 有 '+near[0].name)+'，看当天单量可能拼上'};
-  return {s:'low',txt:'🚗 成趟几率：<b>低</b> —— 途中和周边（≤1.2km）都没有'+label+'，大概率单独跑一趟'};
+    return {s:'mid',txt:'🚗 成趟几率：<b>中</b> —— '+(onway.length?'顺路：'+nm(onway):'周边 '+near[0].d.toFixed(1)+'km 有 '+near[0].name)+'，看当天单量可能拼上',onway:onway,near:near};
+  return {s:'low',txt:'🚗 成趟几率：<b>低</b> —— 途中和周边（≤1.2km）都没有'+label+'，大概率单独跑一趟',onway:[],near:[]};
+}
+/* ===== 8.5 接单判断地图：新点 + 活跃户 + 8/12km 约定圈 ===== */
+var jMap=null,jOriginMk=null,jDyn=[],jPending=null;
+function judgeMapInit(){
+  if(jMap||!window.AMap)return;
+  jMap=new AMap.Map('judgeMap',{zoom:11,center:ORIGIN,viewMode:'2D'});
+  jOriginMk=new AMap.Marker({position:ORIGIN,map:jMap,content:'<div style="background:#c0392b;color:#fff;padding:3px 10px;border-radius:12px;font-size:12px;white-space:nowrap">🍳 出餐点</div>',anchor:'center',zIndex:300});
+  new AMap.Circle({center:ORIGIN,radius:GREEN_KM*1000,map:jMap,strokeColor:'#1e8e3e',strokeWeight:2,strokeOpacity:.75,strokeStyle:'dashed',fillColor:'#1e8e3e',fillOpacity:.05});
+  new AMap.Circle({center:ORIGIN,radius:YELLOW_KM*1000,map:jMap,strokeColor:'#c0392b',strokeWeight:2,strokeOpacity:.75,strokeStyle:'dashed',fillColor:'#c0392b',fillOpacity:.03});   // 12km 上限圈：超圈不送（实报实销）
+  var src=activePts(),act=src.real?src.pts:(function(){var a=[];customers.forEach(function(c){if(c.lng!=null&&c.lat!=null)a.push({name:c.name,pos:[c.lng,c.lat]});});return a;}());
+  act.forEach(function(a){new AMap.Circle({center:a.pos,radius:80,map:jMap,strokeColor:'#1e8e3e',strokeWeight:1,fillColor:'#1e8e3e',fillOpacity:.55});});
+  if(jPending){var f=jPending;jPending=null;judgeMapFocus(f[0],f[1],f[2]);}
+}
+function judgeMapFocus(p,tc,label){
+  if(!jMap){jPending=[p,tc,label];if(window.AMap)judgeMapInit();return;}
+  jDyn.forEach(function(m){m.setMap(null);});jDyn=[];
+  var mk=new AMap.Marker({position:p,map:jMap,content:'<div style="background:#e67e22;color:#fff;padding:3px 10px;border-radius:12px;font-size:12px;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.35)">📍 '+escHtml((label||'新客户').slice(0,18))+'</div>',anchor:'bottom-center',zIndex:400});
+  jDyn.push(mk);
+  var hi={};
+  if(tc){(tc.onway||[]).forEach(function(n){hi[n]=1;});(tc.near||[]).forEach(function(x){hi[x.name]=1;});}
+  if(Object.keys(hi).length){
+    var src=activePts();
+    src.pts.forEach(function(a){if(hi[a.name]){
+      jDyn.push(new AMap.Circle({center:a.pos,radius:150,map:jMap,strokeColor:'#e67e22',strokeWeight:3,fillOpacity:0}));
+      jDyn.push(new AMap.Marker({position:a.pos,map:jMap,content:'<div style="background:#e67e22;color:#fff;padding:1px 7px;border-radius:10px;font-size:11px;white-space:nowrap">'+escHtml(a.name)+'</div>',anchor:'center',zIndex:350}));
+    }});
+  }
+  try{jMap.setFitView([jOriginMk,mk],false,[70,70,70,70],13);}catch(e){jMap.setCenter(ORIGIN);}
 }
 function judge(p){
   var road=km(ORIGIN,p)*ROAD_K;
@@ -1634,6 +1668,7 @@ function judgeDone(loc,label){
   var tc=tripChance(p,document.getElementById('mealtime').value);
   var cls=r.t==='ok'?'ok':(r.t==='mid'?'mid':'bad');
   setJres('<span class="'+cls+'">'+r.msg+'</span>'+(tc?'<br><span style="color:'+CHANCE_C[tc.s]+'">'+tc.txt+'</span>':''));
+  judgeMapFocus(p,tc,label);
   if(r.t!=='bad')planRoute(p);
   var h=document.getElementById('hist');
   var d=document.createElement('div');

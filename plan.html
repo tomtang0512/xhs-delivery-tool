@@ -201,7 +201,7 @@ function parseRptText(raw){
   function push(){if(cur&&(cur.addr||cur.user||cur.dishes.length))orders.push(cur);cur=null;}
   for(var li=0;li<lines.length;li++){
     var L=lines[li].trim();if(!L)continue;var m;
-    if((m=L.match(/[-—=]{3,}\s*(.+?)\s*[-—=]{3,}/))){push();group=m[1];continue;}
+    if((m=L.match(/[-—=]{2,}\s*(.+?\d.+?)\s*[-—=]{2,}/))){push();group=m[1];continue;}   // 分隔线≥2个符号即可（粘贴常丢字：--17:00 - 17:45-----），段内须含数字防误判
     if(/^(上午|中午|下午|晚上)/.test(L)&&L.indexOf('：')>-1&&L.indexOf('#')<0){push();group=L;continue;}
     var Lc=L.replace(/^[^\u4e00-\u9fa5A-Za-z0-9#【（(]+/,'');   // 剥掉 ⭕⭐🔥 等任意前缀符号
     if((m=Lc.match(/^#(\d+)\s*（([^）]*)）?/))){push();cur={no:+m[1],tag:m[2]||'',dishes:[],group:group};continue;}

@@ -1633,8 +1633,8 @@ function judgeLocate(text){
     judgeDone({lng:r.lng,lat:r.lat},r.label);
   }).catch(function(e){setJres('<span class="bad">'+((e&&e.message)||'查询出错')+'</span>');});
 }
-function planRoute(p){
-  var roadP=km(ORIGIN,p)*ROAD_K;
+function planRoute(p,winNew){
+var roadP=km(ORIGIN,p)*ROAD_K;
   // 挑顺路老客户：离“出餐点→新客户”连线不超过2公里（折算后），且比新客户近（在途中）
   var cand=customers.filter(function(k){
     if(k.lng==null||k.lat==null)return false;
@@ -1644,6 +1644,21 @@ function planRoute(p){
     return off<=1.5&&roadK<roadP*0.98;
   }).map(function(k){return {name:k.name,pos:k.lng+','+k.lat,d:km(ORIGIN,[k.lng,k.lat])*ROAD_K};})
     .sort(function(a,b){return a.d-b.d;}).slice(0,8);
+  // 三类标注：可并线（活跃+离主线≤1.2km）/ 近7天未下单 / 活跃但偏离主线（1.2~1.5km 之间只有路线参考意义）
+  var actPts=activePts(),actSet={};
+  actPts.pts.forEach(function(a){actSet[a.name]=1;});
+  cand.forEach(function(c){
+    var a=actPts.pts.filter(function(x){return x.name===c.name;})[0];
+    if(!a){c.tag='inact';return;}
+    var w=a.win||{},has=Object.keys(w).length?(winNew==='b'?(w.l||w.b):(w[winNew]||w.b)):true;   // 同 tripChance：按窗筛
+    if(!has){c.tag='win';return;}
+    var off=distToSeg(a.pos,ORIGIN,p)*ROAD_K,rk=km(ORIGIN,a.pos)*ROAD_K;
+    c.tag=(off<=1.2&&rk<roadP*0.98)?'on':'off';
+  });
+  var tOn=cand.filter(function(c){return c.tag==='on';}).map(function(c){return c.name;});
+  var tInact=cand.filter(function(c){return c.tag==='inact';}).map(function(c){return c.name;});
+  var tWin=cand.filter(function(c){return c.tag==='win';}).map(function(c){return c.name;});
+  var tOff=cand.filter(function(c){return c.tag==='off';}).map(function(c){return c.name;});
   var wps=cand.map(function(c){return c.pos;}).join(';');
   var url='https://restapi.amap.com/v3/direction/driving?key='+KEY+'&origin='+ORIGIN.join(',')+'&destination='+p.join(',')+(wps?'&waypoints='+wps:'')+'&output=JSON&extensions=base';
   getJSON(url).then(function(j){
@@ -1652,7 +1667,7 @@ function planRoute(p){
     var distKm=path.distance/1000;
     var stopsTxt=cand.length?cand.map(function(c){return c.name;}).join(' → ')+' → <b>新客户</b>':'出餐点 → <b>新客户</b>（途中没有可拼的老客户）';
     var alone=7+2*roadP;
-    var extra=(cand.length?'，途经老客户：'+cand.length+' 家':'');
+    var extra=(cand.length?'，途经老客户：'+cand.length+' 家'+(tOn.length<cand.length?'（'+(tOn.length?'可并线：'+tOn.join('、')+'；':'')+(tInact.length?tInact.join('、')+' 近7天未下单；':'')+(tWin.length?tWin.join('、')+' 近7天无该时段单；':'')+(tOff.length?tOff.join('、')+' 偏主线>1.2km':'')+'——与成趟几率同口径）':'（全部可并线）'):'');
     var mins=Math.round(distKm*2.2+(cand.length+1)*5);
     var van=cand.length?Math.max(10.9,1.32*distKm):Math.max(10.9,7.7+1.07*distKm);  // 按2026-09-10实测报价拟合：直送3单+一拖N 4站15.82元
     var vanNote=cand.length?'一拖N拼车（货拉拉实测价）约 '+van.toFixed(0)+' 元，比逐单叫骑手省 '+Math.round((1-van/(alone*(cand.length+1)))*100)+'%':'货拉拉直送（实测价）约 '+van.toFixed(0)+' 元';
@@ -1669,7 +1684,7 @@ function judgeDone(loc,label){
   var cls=r.t==='ok'?'ok':(r.t==='mid'?'mid':'bad');
   setJres('<span class="'+cls+'">'+r.msg+'</span>'+(tc?'<br><span style="color:'+CHANCE_C[tc.s]+'">'+tc.txt+'</span>':''));
   judgeMapFocus(p,tc,label);
-  if(r.t!=='bad')planRoute(p);
+  if(r.t!=='bad')planRoute(p,document.getElementById('mealtime').value);
   var h=document.getElementById('hist');
   var d=document.createElement('div');
   d.innerHTML='<span style="color:'+(r.t==='ok'?'#1e8e3e':r.t==='mid'?'#b26a00':'#c0392b')+'">'+(r.t==='ok'?'✅':r.t==='mid'?'⚠️':'❌')+'</span> '+escHtml(label)+'（'+r.road.toFixed(1)+'km · '+timeLabel()+'）';

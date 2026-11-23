@@ -219,10 +219,13 @@
         <label>希望送达 <input type="time" id="stime" value="11:30"></label>
       </div>
     </div>
-    <div class="card">
-      <div class="step"><span class="no">🗺</span><b>点位地图</b><span class="tip">🔴虚线=12km 上限圈（超圈不送）· 🟢虚线=8km 免运费圈 · 绿点=近7天活跃户（橙圈=能并线的）· 📍=新点</span></div>
-      <div id="judgeMap" style="height:400px;border-radius:10px;border:1px solid var(--line)"></div>
-    </div>
+<div class="card">
+<div class="step"><span class="no">🗺</span><b>点位地图</b><span class="tip">🔴虚线=12km 上限圈（超圈不送）· 🟢虚线=8km 免运费圈 · 粉点=近7天活跃户（橙圈=能并线的）· 📍=新点</span></div>
+<div style="position:relative">
+<div id="judgeMap" style="height:400px;border-radius:10px;border:1px solid var(--line)"></div>
+<button id="jExpand" type="button" class="btn-line" style="position:absolute;top:14px;right:14px;z-index:5;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.18)">⛶ 大地图</button>
+</div>
+</div>
     <div class="card jres" id="jres">等待输入…</div>
     <div class="card" style="padding:8px 12px"><div class="mut" style="margin-bottom:2px"><b>最近判断</b></div><div class="hist" id="hist"></div></div>
   </div>
@@ -1589,12 +1592,12 @@ function tripChance(p,winNew,poly){
 var jMap=null,jOriginMk=null,jDyn=[],jPending=null;
 function judgeMapInit(){
   if(jMap||!window.AMap)return;
-  jMap=new AMap.Map('judgeMap',{zoom:11,center:ORIGIN,viewMode:'2D'});
+  jMap=new AMap.Map('judgeMap',{zoom:11,center:ORIGIN,viewMode:'2D',mapStyle:'amap://styles/dark'});
   jOriginMk=new AMap.Marker({position:ORIGIN,map:jMap,content:'<div style="background:#c0392b;color:#fff;padding:3px 10px;border-radius:12px;font-size:12px;white-space:nowrap">🍳 出餐点</div>',anchor:'center',zIndex:300});
   new AMap.Circle({center:ORIGIN,radius:GREEN_KM*1000,map:jMap,strokeColor:'#1e8e3e',strokeWeight:2,strokeOpacity:.75,strokeStyle:'dashed',fillColor:'#1e8e3e',fillOpacity:.05});
   new AMap.Circle({center:ORIGIN,radius:YELLOW_KM*1000,map:jMap,strokeColor:'#c0392b',strokeWeight:2,strokeOpacity:.75,strokeStyle:'dashed',fillColor:'#c0392b',fillOpacity:.03});   // 12km 上限圈：超圈不送（实报实销）
   var src=activePts(),act=src.real?src.pts:(function(){var a=[];customers.forEach(function(c){if(c.lng!=null&&c.lat!=null)a.push({name:c.name,pos:[c.lng,c.lat]});});return a;}());
-  act.forEach(function(a){new AMap.Circle({center:a.pos,radius:80,map:jMap,strokeColor:'#1e8e3e',strokeWeight:1,fillColor:'#1e8e3e',fillOpacity:.55});});
+  act.forEach(function(a){new AMap.Circle({center:a.pos,radius:80,map:jMap,strokeColor:'#e91e63',strokeWeight:1,fillColor:'#e91e63',fillOpacity:.6});});   // 粉点=活跃户（与客户页签同色）
   if(jPending){var f=jPending;jPending=null;judgeMapFocus(f[0],f[1],f[2]);}
 }
 function judgeMapFocus(p,tc,label){
@@ -1613,6 +1616,26 @@ function judgeMapFocus(p,tc,label){
   }
   try{jMap.setFitView([jOriginMk,mk],false,[70,70,70,70],13);}catch(e){jMap.setCenter(ORIGIN);}
 }
+// —— 点位地图一键展开大地图（fixed 全屏覆盖；切换后强制重算地图尺寸） ——
+document.getElementById('jExpand').onclick=function(){
+var el=document.getElementById('judgeMap');
+if(el._big){
+el._big=false;el.setAttribute('style',el._oldCss||'');
+this.textContent='⛶ 大地图';this.style.zIndex='5';
+}else{
+el._big=true;el._oldCss=el.getAttribute('style')||'';
+el.setAttribute('style','position:fixed;inset:0;width:100%;height:100%;z-index:4000;border-radius:0;border:none;background:#101418');
+this.textContent='✕ 收起大地图';this.style.zIndex='4001';
+}
+setTimeout(function(){
+if(!jMap)return;
+var w=el.clientWidth,h=el.clientHeight;
+try{jMap.resize&&jMap.resize();}catch(e){}
+try{jMap.setSize(new AMap.Size(w,h));}catch(e){}
+try{jMap.panBy(1,0);}catch(e){}
+try{jMap.panBy(-1,0);}catch(e){}
+},350);
+};
 function judge(p){
   var road=km(ORIGIN,p)*ROAD_K;
   var fee=7+2*road;

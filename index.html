@@ -20,6 +20,7 @@
   #btn{background:#c0392b;color:#fff;border:0;border-radius:6px;padding:7px 14px;font-size:14px;cursor:pointer}
   .trow{margin-top:8px}
   #mealtime{flex:1;border:1px solid #ccc;border-radius:6px;padding:7px 9px;font-size:14px;background:#fff}
+#stime{border:1px solid #ccc;border-radius:6px;padding:7px 9px;font-size:14px;background:#fff;width:118px}
   #result{margin-top:10px;font-size:14px;line-height:1.6;min-height:20px}
   .ok{color:#1e8e3e}.mid{color:#b26a00}.bad{color:#c0392b}
   .legend{margin-top:10px;font-size:12px;color:#555;line-height:1.8;border-top:1px dashed #ddd;padding-top:8px}
@@ -186,12 +187,13 @@ details.wk-drop[open]>summary{border-radius:12px 12px 4px 4px}
       <button id="btn">判断</button>
     </div>
     <div class="row trow">
-      <select id="mealtime">
-        <option value="lunch">🥗 午餐 11:00~12:30（两窗）</option>
-        <option value="dinner">🍗 晚餐 17:00~18:30（两窗）</option>
-        <option value="both">🍱 午+晚 两餐都要（合送一次）</option>
-        <option value="special">⏰ 特殊时间（如14:00，加收10元）</option>
+      <select id="mealtime" style="flex:0 0 170px">
+        <option value="l">🥗 午餐窗</option>
+        <option value="d">🍗 晚餐窗</option>
+        <option value="b">🍱 两餐合送（午送）</option>
       </select>
+      <input id="stime" type="time" value="11:30">
+      <span style="font-size:12px;color:#888;white-space:nowrap">希望送达</span>
     </div>
     <div id="result">等待输入…</div>
     <div class="hist" id="hist"></div>
@@ -229,6 +231,7 @@ details.wk-drop[open]>summary{border-radius:12px 12px 4px 4px}
 </div>
 <div id="map"></div>
 <script src="https://webapi.amap.com/maps?v=1.4.15&key=e9973067b859c02990c6b19729ffdce7"></script>
+<script src="delivery-seed.js"></script>
 <script>
 window.onerror=function(msg,src,line,col){window.lastErr=msg+' @'+line+':'+col;return false;};
  // ===== 出餐点（真实店址坐标，不会漂移）=====
@@ -281,6 +284,7 @@ var DEFAULT_CUSTOMERS = [
   {name:'胡·青度健身（天府四街店）',addr:'青度健身天府四街店',lng:104.063725,lat:30.541525,t:'d',meals:1,note:'青度品牌第二家门店；19:45晚窗外时刻；2026-10-20首单'}
 ];
 var CUST_VER = 5;   // 点位库版本：以后改了 DEFAULT_CUSTOMERS 就把这里 +1，老浏览器打开会弹同步提示（v5：固化10.20报单11个活跃点+烁屿前台多客户备注）
+if(typeof NEW_CUSTOMERS!=='undefined'&&NEW_CUSTOMERS.length){ DEFAULT_CUSTOMERS=NEW_CUSTOMERS.slice(); }   // 档案已按周报重建：默认列表=周报点位，「恢复默认/一键同步」不再回写老档案
 function getVer(){ try{ var v=parseInt(localStorage.getItem('cust_ver'),10); return isNaN(v)?0:v; }catch(e){ return 0; } }
 function setVer(v){ try{ localStorage.setItem('cust_ver', String(v)); }catch(e){} }
 // 报单原文粘贴进批量名单时的垃圾行识别（电话/菜品/统计行等，不是真实客户）
@@ -305,6 +309,7 @@ function isJunkCust(c){
   return false;
 }
 function loadCust(){
+  try{if(window.__seedRun&&!localStorage.getItem('custRebuilt'))__seedRun();}catch(e){}   // 首次：先用周报种子重建档案+配送记录（幂等）
   try{
     var s=JSON.parse(localStorage.getItem('customers'));
     if(Array.isArray(s)&&s.length){
@@ -375,9 +380,10 @@ saveCust(); setVer(CUST_VER);
 }
 function renderCustomers(){
   custMarkers.forEach(function(m){ map.remove(m); }); custMarkers = [];
-  customers.forEach(function(k){
-    custMarkers.push(new AMap.CircleMarker({center:[k.lng,k.lat],radius:5,fillColor:'#2980b9',fillOpacity:.85,
-      strokeColor:'#fff',strokeWeight:1,map:map}));
+customers.forEach(function(k){
+if(k.lng==null||k.lat==null)return;   // 无坐标点位（待 geocode 补齐）不上图，避免 Pixel(NaN)
+custMarkers.push(new AMap.CircleMarker({center:[k.lng,k.lat],radius:5,fillColor:'#2980b9',fillOpacity:.85,
+strokeColor:'#fff',strokeWeight:1,map:map}));
     custMarkers.push(new AMap.Text({text:k.name,position:[k.lng,k.lat],anchor:'top-center',map:map,
       style:{'font-size':'11px','color':'#2980b9','background':'rgba(255,255,255,.7)','border':'none'}}));
   });
@@ -429,17 +435,60 @@ function distToSeg(p,a,b){
 }
 
 // ===== 时间窗说明（附加在判断结果后面）=====
+function stimeMin(){var v=document.getElementById('stime').value||'';var m=v.match(/^(\d{1,2}):(\d{2})$/);return m?(+m[1])*60+(+m[2]):null;}
+var WINS={l:{s:660,e:750,name:'午餐'},d:{s:1020,e:1110,name:'晚餐'}};   // 午11:00~12:30 晚17:00~18:30
 function timeNote(){
-  var sel=document.getElementById('mealtime');
-  var v=sel?sel.value:'lunch';
-  if(v==='lunch') return '<br>⏰ 午餐窗（11:00~12:30），不加钱';
-  if(v==='dinner') return '<br>⏰ 晚餐窗（17:00~18:30），不加钱';
-  if(v==='both') return '<br>🍱 两餐合送：中午一趟送两份，放前台/冰箱客户晚上自取——只算一趟配送，不加钱';
-  return '<br>⏰ 特殊时段（两窗外，午11:00~12:30 / 晚17:00~18:30）：首选劝客户改两窗之一+放前台冰箱（不加钱）；坚持现送则加收 '+SPECIAL_TIME_FEE+' 元/单，且该时段当天可能只有这一单＝单独跑一趟';
+  var v=document.getElementById('mealtime').value,t=stimeMin();
+  if(v==='b') return '<br>🍱 两餐合送：中午一趟送两份，放前台/冰箱客户晚上自取——只算一趟配送，不加钱'+(t!=null&&t>WINS.l.e?'<br>⚠️ 但你填的送达时刻已过午窗尾（12:30），实际按特殊时段处理：加收 '+SPECIAL_TIME_FEE+' 元':'');
+  var w=WINS[v];
+  if(t==null) return '<br>⏰ '+w.name+'窗（'+hm2(w.s)+'~'+hm2(w.e)+'），不加钱';
+  if(t>=w.s&&t<=w.e) return '<br>⏰ 希望送达 '+hm2(t)+'，在'+w.name+'窗内（'+hm2(w.s)+'~'+hm2(w.e)+'），不加钱';
+  return '<br>⏰ 希望送达 '+hm2(t)+'，在'+w.name+'窗外：首选劝客户改标准窗+放前台冰箱（不加钱）；坚持现送则加收 '+SPECIAL_TIME_FEE+' 元/单，且该时段当天可能只有这一单＝单独跑一趟';
 }
+function hm2(m){return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0');}
 function timeLabel(){
-  var sel=document.getElementById('mealtime');
-  return sel?sel.options[sel.selectedIndex].text.replace(/^\S+\s*/,''):'午餐';
+  var v=document.getElementById('mealtime').value,t=stimeMin();
+  var nm={l:'午餐',d:'晚餐',b:'两餐合送'}[v]||'';
+  return nm+(t!=null?' '+hm2(t):'');
+}
+// ===== 成趟几率：基于「近期活跃用户」（近7天有单的地址）判断，不看流失/全档案 =====
+var CHANCE_C={'high':'#1e8e3e','mid':'#b26a00','low':'#c0392b'};
+function activePts(){
+var log=[];try{log=JSON.parse(localStorage.getItem('deliveryLog')||'[]');}catch(e){}
+var baseD=new Date();baseD.setHours(0,0,0,0);   // 基准日=max(今天,数据最新日期)：周报口径按数据截止日倒查7天
+log.forEach(function(r){if(r.d){var ts=new Date(r.d+'T00:00:00').getTime();if(ts>baseD.getTime())baseD=new Date(ts);}});
+var cutoff=baseD.getTime()-7*86400000, act={};
+  customers.forEach(function(c){if(c.lng!=null&&c.lat!=null)act[c.name+'|'+c.addr]={name:c.name,pos:[c.lng,c.lat],last:0,win:{}};});
+  log.forEach(function(r){
+    var a=act[(r.name||'')+'|'+(r.addr||'')];if(!a)return;
+    var ts=new Date(r.d+'T00:00:00').getTime();if(ts<cutoff)return;
+    a.last=Math.max(a.last,ts);a.win[r.win||'l']=(a.win[r.win||'l']||0)+1;
+  });
+  var out=[];Object.keys(act).forEach(function(k){if(act[k].last)out.push(act[k]);});
+  return {pts:out,real:out.length>0};
+}
+function tripChance(p,winNew){
+  var src=activePts(),act=src.pts;
+  if(!act.length){   // 无配送记录时退回全档案口径，并明示
+    customers.forEach(function(c){if(c.lng!=null&&c.lat!=null)act.push({name:c.name,pos:[c.lng,c.lat],win:{}});});
+    if(!act.length)return null;
+  }
+  var label=src.real?'近7天活跃户':'档案户（暂无配送记录，先按全档案口径）';
+  var roadP=km(ORIGIN,p)*ROAD_K,onway=[],near=[];
+  act.forEach(function(a){
+    var w=a.win||{},has=Object.keys(w).length?(winNew==='b'?(w.l||w.b):(w[winNew]||w.b)):true;   // 无记录的兜底户不按窗筛
+    if(!has)return;
+    var off=distToSeg(a.pos,ORIGIN,p)*ROAD_K,roadK=km(ORIGIN,a.pos)*ROAD_K;
+    if(off<=1.2&&roadK<roadP*0.98)onway.push(a.name);
+    var dn=hav(a.pos,p)*ROAD_K;if(dn<=1.2)near.push({name:a.name,d:dn});
+  });
+  near.sort(function(a,b){return a.d-b.d;});
+  function nm(x,n){return x.slice(0,n||3).join('、')+(x.length>(n||3)?' 等':'');}
+  if(onway.length>=2||(near.length&&near[0].d<=0.6))
+    return {s:'high',txt:'🚗 成趟几率：<b>高</b> —— '+label+'中有 '+onway.length+' 家顺路'+(near.length?'、最近 '+near[0].name+' 仅 '+near[0].d.toFixed(1)+'km':'')+'（'+nm(onway.concat(near.map(function(x){return x.name;})))+'），大概率拼趟'};
+  if(onway.length===1||near.length)
+    return {s:'mid',txt:'🚗 成趟几率：<b>中</b> —— '+(onway.length?'顺路：'+nm(onway):'周边 '+near[0].d.toFixed(1)+'km 有 '+near[0].name)+'，看当天单量可能拼上'};
+  return {s:'low',txt:'🚗 成趟几率：<b>低</b> —— 途中和周边（≤1.2km）都没有'+label+'，大概率单独跑一趟'};
 }
 function judge(p){
   var road = km(ORIGIN,p)*ROAD_K;
@@ -664,6 +713,14 @@ var out=document.getElementById('rptout');
   window.__rptOrders=data.orders;   // 供排线统计「今日餐数」（覆盖档案 meals）
   window.__rptNames={};             // 今日报单用户名（按客户索引），重建保证重复识别幂等
   if(!data.orders.length){ out.innerHTML='<span class="bad">没解析出报单：确认每单以 #编号 开头，且有 用户：/地址： 行</span>'; window.__rptBusy=false; return; }
+  try{   // 配送历史积累（真实记录）：供 customers.html 客户档案页做活跃度分层（近7/14天）
+    var lg=[];try{lg=JSON.parse(localStorage.getItem('deliveryLog')||'[]');}catch(e){}
+    var now=new Date(),ds=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0');
+    var winNow=(now.getHours()<15?'l':'d');
+    data.orders.forEach(function(o){lg.push({d:ds,name:(o.match?o.match.c.name:(o.user||'')),addr:(o.match?o.match.c.addr:(o.addr||'')),win:winNow,meals:o.meals||1});});
+    if(lg.length>3000)lg=lg.slice(-3000);
+    localStorage.setItem('deliveryLog',JSON.stringify(lg));
+  }catch(e){}
   data.orders.forEach(function(o){
     o.match=o.addr?matchCustIdx(o.user,o.addr):null;
     o.pos=o.match?[o.match.c.lng,o.match.c.lat]:null;
@@ -815,7 +872,9 @@ function done(loc, label){
   new AMap.InfoWindow({content:'<b>'+label+'</b><br>'+r.msg,offset:new AMap.Pixel(0,-14)}).open(map,p);
   markers.push(m);
   map.setFitView(markers.slice(-5),false,[100,100,320,100]);
-  setResult(r.t==='ok'?'<span class="ok">'+r.msg+'</span>':r.t==='mid'?'<span class="mid">'+r.msg+'</span>':'<span class="bad">'+r.msg+'</span>');
+  var tc = tripChance(p, document.getElementById('mealtime').value);
+  var base = r.t==='ok'?'<span class="ok">'+r.msg+'</span>':r.t==='mid'?'<span class="mid">'+r.msg+'</span>':'<span class="bad">'+r.msg+'</span>';
+  setResult(base+(tc?'<br><span style="color:'+CHANCE_C[tc.s]+'">'+tc.txt+'</span>':''));
   if(r.t!=='bad'){ planRoute(p); } else if(routeLine){ map.remove(routeLine); routeLine=null; }
   var h=document.getElementById('hist');
   var d=document.createElement('div');

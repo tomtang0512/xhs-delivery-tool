@@ -75,7 +75,8 @@ header h1{font-size:16px}
       <span class="dot" style="background:#e91e63"></span>近期活跃：近 7 天有单<br>
       <span class="dot" style="background:#f0a04b"></span>趋淡：8~14 天内有单<br>
       <span class="dot" style="background:#aab4af"></span>流失：近 14 天无单<br>
-      点越大 = 近 30 天单越多；鼠标放到点上 → 右侧看近 30 天记录
+      点越大 = 近 30 天单越多；鼠标放到点上 → 右侧看近 30 天记录<br>
+      <span style="color:#ff8a5c">🔥 红边点位 = 有客诉史</span>（同步 badcase 台账，仅统计填了客户名的记录）
     </div>
   </div>
   <div class="side">
@@ -87,6 +88,7 @@ header h1{font-size:16px}
 var KEY='e9973067b859c02990c6b19729ffdce7',ORIGIN=[104.045634,30.557046];
 var CLS={act:{c:'#e91e63',label:'近期活跃'},fade:{c:'#f0a04b',label:'趋淡'},lost:{c:'#aab4af',label:'流失'}};
 var WIN={l:'午餐',d:'晚餐',b:'两餐'};
+var bcMap={};   // 客诉史映射（badcase-tracker 云端，仅匹配填了客户名的记录）
 function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(m){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m];});}
 function addrShort(s){s=(s||'').replace(/^四川省?/,'').replace(/^成都市?/,'').replace(/^(武侯区|双流区|锦江区|青羊区|金牛区|成华区|高新区|天府新区|郫都区|龙泉驿区)/,'');return s.length>12?s.slice(0,12)+'…':s;}
 function dstr(back){var d=new Date();d.setDate(d.getDate()-back);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
@@ -223,6 +225,8 @@ function showCard(i){
     +(p.cx==='hard'?'<span class="chip">电梯难等·停8分</span>':(p.cx==='easy'?'<span class="chip">好送·停3分</span>':''))
     +'<span class="chip">近30天 '+p.recs.length+' 单</span></div>';
   if(p.otherAddr)h+='<div class="memo">📌 '+esc(p.otherAddr)+'</div>';
+  var bc=bcMap[p.name];
+  if(bc)h+='<div class="memo" style="background:#fdeee6;border-color:#f3c3ae;color:#a33d1a">🔥 客诉史 '+bc.n+' 次（最近 '+bc.last+'｜'+esc(bc.tps.slice(0,3).join('、'))+'）——配送重点核对</div>';
   if(p.note)h+='<div class="sum">📝 '+esc(p.note)+'</div>';
   if(p.recs.length){
     h+='<div class="rec">';
@@ -257,7 +261,7 @@ function renderList(){
     .sort(function(a,b){return a.p.lastDays-b.p.lastDays;})
     .forEach(function(x){var p=x.p;
       h+='<div class="li" data-i="'+x.i+'"><span class="dot" style="background:'+CLS[p.cls].c+'"></span>'
-        +'<span class="nm">'+esc(p.name)+'</span><span class="ad">'+esc(addrShort(p.addr))+' · '+(WIN[p.win]||'')+'</span>'
+        +'<span class="nm"'+(bcMap[p.name]?' style="color:#e4572e"':'')+'>'+esc(p.name)+(bcMap[p.name]?' 🔥':'')+'</span><span class="ad">'+esc(addrShort(p.addr))+' · '+(WIN[p.win]||'')+'</span>'
         +'<span class="last">'+(p.lastDays<=30?p.lastDays+'天前':'30天+')+'</span></div>';});
   el.innerHTML=h||'<div style="padding:20px;text-align:center;color:#8a9490;font-size:12px">该分层暂无客户</div>';
   el.querySelectorAll('.li').forEach(function(li){li.onclick=function(){var i=+li.getAttribute('data-i');showCard(i);
@@ -289,6 +293,32 @@ var sb=document.getElementById('srcBadge');
 if(demo){sb.className='srcBadge';sb.textContent='⚠ 演示数据 '+log.length+' 条（点此清空，改用真实报单积累）';
   sb.onclick=function(){if(confirm('清空演示配送记录？之后由主工具每次识别报单自动积累真实记录。')){localStorage.removeItem('deliveryLog');location.reload();}};}
 else{sb.className='srcBadge real';sb.textContent='✓ 真实配送记录 '+log.length+' 条'+(logMaxD?(' · 截至 '+logMaxD+'（倒查 7/14 天）'):'');}
+
+/* ===== 客诉联动（badcase-tracker 云端 data.json，仅匹配填了客户名的记录） ===== */
+function loadBc(){
+  fetch('https://tomtang0512.github.io/badcase-tracker/data.json?t='+Date.now(),{cache:'no-store'})
+    .then(function(r){return r.ok?r.json():null;})
+    .then(function(d){
+      if(!d||!Array.isArray(d.records))return;
+      var m={};
+      d.records.forEach(function(rc){
+        var nm=String(rc.customerName||'').trim();if(!nm)return;
+        var b=m[nm]||(m[nm]={n:0,last:'',tps:[]});
+        b.n++;
+        if(String(rc.date||'')>b.last)b.last=String(rc.date||'');
+        var t=String(rc.type||'').split('·').pop().trim();if(t&&b.tps.indexOf(t)<0)b.tps.push(t);
+      });
+      bcMap=m;
+      markers.forEach(function(mk){   // 地图红边：有客诉史的点描红（setContent 重设，避免被地图重绘覆盖）
+        if(bcMap[pts[mk.i].name]){
+          try{mk.dot.setOptions({strokeColor:'#e4572e',strokeWeight:3.5});}catch(e){}
+          try{var ch=mk.m.getContent();if(ch&&String(ch).indexOf('#e4572e')<0)mk.m.setContent(String(ch).replace(/border-color:[^;'"]+/,'border-color:#e4572e'));}catch(e2){}
+        }
+      });
+      renderList();
+    }).catch(function(){});
+}
+loadBc();
 </script>
 </body>
 </html>

@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>壮壮FIT 客户档案 · 活跃度分层地图</title>
+<script src="https://webapi.amap.com/maps?v=1.4.15&key=e9973067b859c02990c6b19729ffdce7"></script>
+<script src="delivery-seed.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,'PingFang SC','Microsoft YaHei',sans-serif;background:#f4f6f5;color:#1c2b26;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+header{background:#fff;padding:10px 16px;border-bottom:1px solid #e3e8e6;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+header h1{font-size:16px}
+.stat{font-size:12px;padding:3px 10px;border-radius:12px;background:#f4f6f5;border:1px solid #e3e8e6}
+.stat b{font-size:14px}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:4px;vertical-align:middle}
+.filters{display:flex;gap:6px;margin-left:auto}
+.fbtn{font-size:12px;padding:4px 12px;border-radius:14px;border:1.5px solid #dfe5e2;background:#fff;cursor:pointer;user-select:none}
+.fbtn.on{border-color:currentColor;font-weight:bold}
+.f-act{color:#e91e63}.f-fade{color:#d97706}.f-lost{color:#8a9490}
+.srcBadge{font-size:11px;color:#8a6d1a;background:#fdf6e3;border:1px solid #ead9a8;border-radius:10px;padding:2px 8px;cursor:pointer}
+.srcBadge.real{color:#1e6b4f;background:#e8f5ee;border-color:#bfe3d2;cursor:default}
+.main{flex:1;display:flex;min-height:0}
+.mapwrap{flex:1;position:relative;min-width:0}
+#map{position:absolute;inset:0}
+.side{width:340px;background:#fff;border-left:1px solid #e3e8e6;display:flex;flex-direction:column;min-height:0}
+#card{padding:14px;border-bottom:1px solid #e3e8e6;overflow:auto;max-height:55%}
+#card .hint{font-size:12px;color:#8a9490;line-height:1.7}
+#card h2{font-size:15px;margin-bottom:2px}
+#card .addr{font-size:12px;color:#5d6f68;margin-bottom:6px}
+#card .chips{margin:4px 0 8px}
+#card .chip{display:inline-block;font-size:11px;padding:2px 8px;border-radius:10px;margin-right:4px;background:#f4f6f5;border:1px solid #e3e8e6}
+#card .rec{max-height:200px;overflow:auto;font-size:12px;line-height:1.9;border-top:1px dashed #e3e8e6;padding-top:6px}
+#card .rec .d{display:flex;justify-content:space-between;color:#3c4a44}
+#card .rec .d em{font-style:normal;color:#8a9490}
+#card .memo{font-size:12px;background:#fdf6e3;border:1px solid #ead9a8;border-radius:8px;padding:6px 8px;margin:6px 0;color:#6b5a1e}
+#card .sum{font-size:12px;color:#5d6f68;margin-top:6px;line-height:1.7}
+#list{flex:1;overflow:auto;padding:8px}
+.li{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:8px;cursor:pointer;font-size:13px}
+.li:hover{background:#f4f6f5}
+.li .nm{font-weight:bold;flex-shrink:0}
+.li .ad{color:#8a9490;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.li .last{font-size:11px;color:#8a9490;flex-shrink:0}
+.pin{background:#fff;border:1px solid #e8e0d8;border-radius:10px;padding:2px 8px;font-size:11px;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,.12);color:#3c4a44}
+.pin b{font-size:12px}
+.pin.hi{outline:2px solid #e91e63}
+.legend{position:absolute;left:12px;bottom:14px;background:rgba(16,20,24,.85);border:1px solid #3a4440;border-radius:10px;padding:8px 12px;font-size:12px;line-height:1.9;color:#cfd8d3;box-shadow:0 2px 8px rgba(0,0,0,.4);backdrop-filter:blur(4px)}
+.mapwrap{flex:1;position:relative;min-width:0}
+</style>
+</head>
+<body>
+<header>
+  <h1>👥 客户档案 · 活跃度分层</h1>
+  <span class="stat"><span class="dot" style="background:#e91e63"></span>活跃(≤7天) <b id="nAct">0</b></span>
+  <span class="stat"><span class="dot" style="background:#f0a04b"></span>趋淡(8~14天) <b id="nFade">0</b></span>
+  <span class="stat"><span class="dot" style="background:#aab4af"></span>流失(>14天) <b id="nLost">0</b></span>
+  <span class="srcBadge" id="srcBadge"></span>
+  <div class="filters">
+    <button class="fbtn f-act on" data-f="act">活跃</button>
+    <button class="fbtn f-fade on" data-f="fade">趋淡</button>
+    <button class="fbtn f-lost on" data-f="lost">流失</button>
+    <button class="fbtn" id="btnTxt" style="color:#3c4a44">收起文字</button>
+  </div>
+</header>
+<div class="main">
+  <div class="mapwrap">
+    <div id="map"></div>
+    <div class="legend">
+      <b>分层口径</b>（按该地址最近一次配送）<br>
+      <span class="dot" style="background:#e91e63"></span>近期活跃：近 7 天有单<br>
+      <span class="dot" style="background:#f0a04b"></span>趋淡：8~14 天内有单<br>
+      <span class="dot" style="background:#aab4af"></span>流失：近 14 天无单<br>
+      点越大 = 近 30 天单越多；鼠标放到点上 → 右侧看近 30 天记录
+    </div>
+  </div>
+  <div class="side">
+    <div id="card"><div class="hint">把鼠标挪到地图上的任意点位（或点右侧列表），这里会显示该地址近 30 天的配送记录与习惯。</div></div>
+    <div id="list"></div>
+  </div>
+</div>
+<script>
+var KEY='e9973067b859c02990c6b19729ffdce7',ORIGIN=[104.045634,30.557046];
+var CLS={act:{c:'#e91e63',label:'近期活跃'},fade:{c:'#f0a04b',label:'趋淡'},lost:{c:'#aab4af',label:'流失'}};
+var WIN={l:'午餐',d:'晚餐',b:'两餐'};
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(m){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m];});}
+function addrShort(s){s=(s||'').replace(/^四川省?/,'').replace(/^成都市?/,'').replace(/^(武侯区|双流区|锦江区|青羊区|金牛区|成华区|高新区|天府新区|郫都区|龙泉驿区)/,'');return s.length>12?s.slice(0,12)+'…':s;}
+function dstr(back){var d=new Date();d.setDate(d.getDate()-back);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+var BASE_T=null;   // 分类基准日 = max(今天, 数据最新日期)：周报数据截止日早于今天时，按数据口径倒查
+function setBase(maxD){var t=new Date(maxD+'T00:00:00'),n=new Date();n.setHours(0,0,0,0);BASE_T=t>n?t:new Date(n);}
+function daysAgo(ds){var d=new Date(ds+'T00:00:00'),t=BASE_T||new Date();t.setHours(0,0,0,0);return Math.round((t-d)/86400000);}
+function fmtD(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+
+/* ===== 数据：客户档案 + 配送历史（无历史时生成演示数据） ===== */
+var DEFAULT_CUSTOMERS = [
+  {name:'政务服务中心',addr:'高新区政务服务中心（蕾蕾）',lng:104.057413,lat:30.552034,t:'l',meals:1,note:'蕾蕾 12:00前；荞麦面过凉水；1.9km'},
+  {name:'软件园D7',addr:'天府软件园D区D7座901',lng:104.074183,lat:30.541607,t:'l',meals:1,note:'张 11:40前；餐需加热'},
+  {name:'软件园D3',addr:'天府软件园D3栋马士基',lng:104.071199,lat:30.541204,t:'l',meals:2,note:'雷芸芸/Sheep 11:30 午2餐；偶尔晚18:30加餐；4.6km'},
+  {name:'晶科一号',addr:'武侯区天晖路360号晶科一号1511',lng:104.063597,lat:30.589506,t:'l',meals:1,note:'何软 11:40；5.5km'},
+  {name:'理想中心',addr:'武侯区天益街38号理想中心1栋610',lng:104.062733,lat:30.595063,t:'l',meals:1,note:'刘维一 11:30；5.9km'},
+  {name:'中德时代星辰',addr:'中德时代星辰E区3号楼1单元2214',lng:104.079876,lat:30.522632,t:'l',meals:2,cx:'hard',note:'小王 12:00前，常一次2餐；上楼；7.7km'},
+  {name:'五冶大厦',addr:'五冶大厦B区19楼',lng:104.084334,lat:30.589677,meals:1,cx:'hard',note:'赵 15:00特殊时段；出电梯打电话；7.2km'},
+  {name:'桐梓林中华园',addr:'桐梓林北路6号中华园锦园9-3-A座',lng:104.06354,lat:30.617221,t:'d',meals:1,note:'袁先生 晚17:30标准窗；8.6km'},
+  {name:'卓锦荟',addr:'和祥二街卓锦荟专家公寓前台',lng:104.108061,lat:30.522502,t:'l',meals:1,cx:'easy',note:'李先生 11:30；放前台；9.1km'},
+  {name:'创新中心E栋',addr:'和祥二街505号新加坡创新中心E栋7楼',lng:104.109836,lat:30.519588,t:'l',meals:1,note:'彭家俊 11:30；上楼；9.5km'},
+  {name:'东方希望大厦',addr:'高朋大道3号东方希望大厦B座3楼305',lng:104.041722,lat:30.625895,t:'l',meals:1,note:'小奶油 11:40；10.4km → 每单+8元'},
+  {name:'交通管理学校',addr:'红牌楼佳灵路22号四川省交通管理学校外卖柜',lng:104.022847,lat:30.628773,t:'l',meals:1,cx:'easy',note:'吴 12:00前；红牌楼10.3km → 每单+8元；放外卖柜'},
+  {name:'观城9栋',addr:'观城9栋1单元504',lng:104.121447,lat:30.647202,t:'l',meals:1,cx:'hard',note:'汤女士 11:15；16km ⛔不接（周复购，可集中日/自提）'},
+  {name:'滨江天际',addr:'锦江区狮子山街道滨江天际6栋606',lng:104.126774,lat:30.614009,t:'l',meals:1,cx:'hard',note:'zzzzl 11:50；13.5km ⛔不接（周复购）'},
+  {name:'锦江樱花街',addr:'锦江区樱花街383号2-1-1702',lng:104.150956,lat:30.604647,t:'l',meals:1,cx:'hard',note:'百合 12:00；14.4km ⛔不接'},
+  {name:'国机西南大厦',addr:'成华区航天路50号国机西南大厦B座10楼',lng:104.174825,lat:30.688108,t:'l',meals:1,cx:'hard',note:'范女士 11:40；23.9km ⛔不接'},
+  {name:'乐刻私教馆',addr:'天府二街999号世豪广场3层（高新伊藤店）',lng:104.044099,lat:30.550429,t:'d',meals:2,note:'健身房固定点位；许先生/杨方云 晚19:00送（晚窗外）'},
+  {name:'青度健身（香月湖）',addr:'吉庆一路香月湖6栋负1楼',lng:104.058985,lat:30.555518,t:'l',meals:2,note:'健身房固定点位；韩先生 午12:00前 2餐'},
+  {name:'熠健身（汇锦城店）',addr:'盛邦街100号汇锦城8栋C座',lng:104.054242,lat:30.556066,meals:3,note:'自配送 14:00 ×3餐；不进排线'},
+  {name:'朗诗熙华府',addr:'盛治街777号朗诗熙华府12栋2302',lng:104.042105,lat:30.552414,t:'l',meals:1,cx:'hard',note:'李冠霖 12:31~13:00特殊窗；上楼2302；近店'},
+  {name:'烁屿健身（中和）',addr:'吉龙二街246号',lng:104.089438,lat:30.535391,t:'b',meals:2,note:'健身房固定点位（超级店）；邱静婷/bunny谢/毛教练 常多单同址；无电话送前台+拍照'},
+  {name:'烁屿健身（中和精品店）',addr:'梓州大道辅路与应龙路口（精品店）',lng:104.082473,lat:30.532688,t:'b',meals:1,note:'试吃投放点；9.13试吃8餐'},
+  {name:'荟创空间233',addr:'吉龙二街430号（陆肖地铁站A口）',lng:104.095814,lat:30.535185,t:'b',meals:1,cx:'easy',note:'健身房固定点位，与乡村兔同楼'},
+  {name:'乡村兔（中和店）',addr:'吉龙二街430号乡村兔鲜兔火锅',lng:104.096008,lat:30.535474,t:'b',meals:1,note:'马伯伦 12:00；到店打电话；试吃/新客投放点'},
+  {name:'嘉年华青年城',addr:'锦韵路533号嘉年华青年城smart公寓',lng:104.081368,lat:30.535502,t:'b',meals:1,note:'试吃投放点'},
+  {name:'新怡花园C区',addr:'观东一街555号新怡花园C区-6栋',lng:104.08661,lat:30.531884,t:'l',meals:2,note:'试吃投放点；9.13送2餐'},
+  {name:'半伴健身（银泰城5楼）',addr:'银泰城商场5楼半伴健身',lng:104.059159,lat:30.541043,t:'l',meals:2,note:'李店 15928090706；12:00前 常一次2餐；健身房固定点位'},
+  {name:'梵怡诺瑜伽馆（银泰城3楼）',addr:'银泰城商场3楼梵怡诺瑜伽馆',lng:104.059159,lat:30.541043,t:'d',meals:2,note:'何小倩/缑琪 17:00前 常一次2餐；何小倩需注意餐温（曾嫌过凉）'},
+  {name:'王凡·天祥广场',addr:'天府大道中段500号东方希望天祥广场A座外卖柜',lng:104.067854,lat:30.552968,t:'l',meals:1,note:'王凡 12:30前；外卖柜'},
+  {name:'初九·凯莱丽景雅筑',addr:'剑南大道南段1399号凯莱·丽景雅筑7栋4单元3号',lng:104.044668,lat:30.518481,t:'l',meals:1,note:'初九 12:30前；上楼；健身房合作点'},
+  {name:'阿妍·誉峰遇见',addr:'交子大道500号誉峰遇见A座A2433',lng:104.050965,lat:30.583119,t:'l',meals:1,note:'阿妍 12:30前；上楼'},
+  {name:'孙先生·软件园C区柜',addr:'天府软件园C区-4栋外卖柜',lng:104.071558,lat:30.539804,t:'l',meals:1,note:'孙先生 ⏱整单备注12点前（比窗尾严）；外卖柜'},
+  {name:'小纸条·空港星汇',addr:'空港星汇-8栋一单元305',lng:103.981371,lat:30.549144,t:'l',meals:1,cx:'hard',note:'小纸条 12:30前；少油少盐；远点~10.5km'},
+  {name:'杨妍麟·金房大榕湾',addr:'石羊场路555号金房大榕湾2-1802',lng:104.042575,lat:30.583525,t:'l',meals:1,note:'杨妍麟 12:30前；上楼'},
+  {name:'杨振·四川富润国际',addr:'四川富润国际广场-外卖柜',lng:104.07005,lat:30.554,t:'d',meals:1,note:'杨振 17:30前；送到打电话；注意餐温'},
+  {name:'杨文越·梵怡诺（清凤时代城）',addr:'清凤时代城梵怡诺瑜伽馆（同店小区）',lng:104.045045,lat:30.556878,t:'d',meals:1,note:'异业合作体验餐；距店~0.1km'},
+  {name:'胡·青度健身（天府四街店）',addr:'青度健身天府四街店',lng:104.063725,lat:30.541525,t:'d',meals:1,note:'青度品牌第二家门店；19:45晚窗外时刻；2026-10-20首单'}
+];
+var demo=false,log=[],logMaxD=null;
+try{if(window.__seedRun)__seedRun();}catch(e){}   // 首次打开先把周报种子重建档案+配送记录，再读
+var customers=[];try{customers=JSON.parse(localStorage.getItem('customers')||'[]');}catch(e){}
+if(!customers.length)customers=DEFAULT_CUSTOMERS;   // 独立打开时的兜底（不写回，主工具入库后自动共用）
+try{log=JSON.parse(localStorage.getItem('deliveryLog')||'[]');}catch(e){}
+if(log.length){log.forEach(function(r){if(r.d&&(!logMaxD||r.d>logMaxD))logMaxD=r.d;});if(logMaxD)setBase(logMaxD);}
+if(!log.length){log=genDemo();demo=true;}   // 演示数据只在内存，真实记录一旦积累即自动替代
+function genDemo(){
+  var out=[];
+  customers.forEach(function(c,i){
+    var r=Math.abs(Math.sin(i*127.1)*43758.5453)%1;
+    var mode=r<0.45?'act':(r<0.72?'fade':'lost');
+    var win=c.t==='b'?(i%2?'l':'d'):(c.t||'l');
+    var meals=c.meals||1;
+    if(mode==='act'){var n=3+Math.floor(r*47)%5;
+      for(var k=0;k<n;k++)out.push({d:dstr(Math.floor((r*97+k*53)%7)),name:c.name,addr:c.addr,win:win,meals:meals});}
+    else if(mode==='fade'){var n2=2+Math.floor(r*31)%4;
+      for(var k2=0;k2<n2;k2++)out.push({d:dstr(8+Math.floor((r*71+k2*37)%7)),name:c.name,addr:c.addr,win:win,meals:meals});}
+    else{var back=15+Math.floor(r*89)%40;
+      if(back<=30)out.push({d:dstr(back),name:c.name,addr:c.addr,win:win,meals:meals});}
+  });
+  var jk=customers.filter(function(c){return c.name==='晶科一号';})[0];
+  if(jk)out.push({d:dstr(22),name:jk.name,addr:'武侯区天晖路360号晶科一号1512（旧工位）',win:'l',meals:1});   // 双地址演示
+  return out;
+}
+
+/* ===== 聚合：一个地址 = 一个点（同用户多地址各自独立，基于地址看习惯） ===== */
+var pts=[];   // {name,addr,lng,lat,win,recs:[{d,win,meals}],cls,lastDays,otherAddr}
+customers.forEach(function(c){
+  if(c.lng==null)return;
+  var recs=log.filter(function(r){return r.name===c.name&&r.addr===c.addr;});
+  var others=log.filter(function(r){return r.name===c.name&&r.addr!==c.addr;});
+  var othSummary='';
+  if(others.length){
+    var oa={};others.forEach(function(r){oa[r.addr]=(oa[r.addr]||0)+1;});
+    othSummary='同用户 2 个地址，另一地址为 '+Object.keys(oa).join('、')+'（近30天 '+others.length+' 单）';
+  }
+  var last=null;recs.forEach(function(r){if(!last||r.d>last)last=r.d;});
+  var lastDays=last?daysAgo(last):999;
+  var cls=lastDays<=7?'act':(lastDays<=14?'fade':'lost');
+  pts.push({name:c.name,addr:c.addr,lng:c.lng,lat:c.lat,win:c.t||'',recs:recs.slice().sort(function(a,b){return b.d.localeCompare(a.d);}),
+    cls:cls,lastDays:lastDays,otherAddr:othSummary,cx:c.cx||'',note:c.note||''});
+});
+/* 30天内总单数排序的记录计数 */
+var nCount={act:0,fade:0,lost:0};pts.forEach(function(p){nCount[p.cls]++;});
+document.getElementById('nAct').textContent=nCount.act;
+document.getElementById('nFade').textContent=nCount.fade;
+document.getElementById('nLost').textContent=nCount.lost;
+
+/* 热力半径：近30天单数越多，点越大（sqrt 压缩，避免头部过大） */
+pts.forEach(function(p){p.n30=p.recs.filter(function(r){return daysAgo(r.d)<=30;}).length;});
+var maxN=Math.max.apply(null,pts.map(function(p){return p.n30;}).concat([5]));
+function heatR(n){return 4.5+10*Math.sqrt(n/maxN);}
+
+/* ===== 地图 ===== */
+var map=new AMap.Map('map',{zoom:12,center:[104.07,30.57],viewMode:'2D',mapStyle:'amap://styles/dark'});
+new AMap.Circle({center:ORIGIN,radius:3000,strokeColor:'#27ae60',strokeWeight:1,strokeOpacity:.5,strokeStyle:'dashed',fillColor:'#27ae60',fillOpacity:.04,map:map});
+new AMap.Marker({position:ORIGIN,map:map,content:'<div style="background:#c0392b;color:#fff;padding:3px 10px;border-radius:12px;font-size:12px;white-space:nowrap">🍳 出餐点</div>',anchor:'center',zIndex:300});
+var markers=[];
+pts.forEach(function(p,i){
+  var c=CLS[p.cls].c;
+  var label='<b>'+esc(p.name)+'</b>·'+esc(addrShort(p.addr))+'·'+(WIN[p.win]||'');
+  var m=new AMap.Marker({position:[p.lng,p.lat],map:map,zIndex:p.cls==='act'?120:(p.cls==='fade'?110:100),
+    content:'<div class="pin" style="background:'+c+';border-color:'+c+';color:#fff" data-i="'+i+'">'+label+'</div>',anchor:'bottom-left'});
+  var dot=new AMap.CircleMarker({center:[p.lng,p.lat],radius:heatR(p.n30),fillColor:c,fillOpacity:p.cls==='lost'?0.55:0.9,strokeColor:'#fff',strokeWeight:1.5,map:map,zIndex:p.cls==='act'?119:109});
+  function open(ev){showCard(i);m.setTop&&m.setTop();}
+  m.on('mouseover',open);m.on('click',open);dot.on('mouseover',open);dot.on('click',open);
+  markers.push({m:m,dot:dot,cls:p.cls,i:i});
+});
+
+/* ===== 卡片 ===== */
+function showCard(i){
+  var p=pts[i],c=CLS[p.cls];
+  var el=document.getElementById('card');
+  var h='<h2>'+esc(p.name)+'</h2><div class="addr">'+esc(p.addr)+'</div>'
+    +'<div class="chips"><span class="chip" style="background:'+c.c+';border-color:'+c.c+';color:#fff">'+c.label+(p.lastDays<=30?(' · 最近 '+p.lastDays+' 天前'):' · 30天无记录')+'</span>'
+    +(p.win?'<span class="chip">窗口 '+WIN[p.win]+'</span>':'')
+    +(p.cx==='hard'?'<span class="chip">电梯难等·停8分</span>':(p.cx==='easy'?'<span class="chip">好送·停3分</span>':''))
+    +'<span class="chip">近30天 '+p.recs.length+' 单</span></div>';
+  if(p.otherAddr)h+='<div class="memo">📌 '+esc(p.otherAddr)+'</div>';
+  if(p.note)h+='<div class="sum">📝 '+esc(p.note)+'</div>';
+  if(p.recs.length){
+    h+='<div class="rec">';
+    p.recs.forEach(function(r){h+='<div class="d"><span>'+r.d+' · '+(WIN[r.win]||r.win)+'</span><em>'+r.meals+'餐</em></div>';});
+    h+='</div>';
+    var lw={l:0,d:0};p.recs.forEach(function(r){lw[r.win]=(lw[r.win]||0)+1;});
+    var habit=Object.keys(lw).filter(function(k){return lw[k];}).sort(function(a,b){return lw[b]-lw[a];}).map(function(k){return WIN[k]+'×'+lw[k];}).join(' / ');
+    h+='<div class="sum">习惯：'+habit+(p.recs.length>=3?(' · 约每 '+Math.max(1,Math.round(30/p.recs.length))+' 天 1 单'):'')+'</div>';
+  }else h+='<div class="sum">近 30 天没有该地址的配送记录（新客或流失）。</div>';
+  el.innerHTML=h;
+  document.querySelectorAll('.pin').forEach(function(pn,idx){pn.classList.toggle('hi',+pn.getAttribute('data-i')===i);});
+}
+
+/* ===== 列表 + 筛选 ===== */
+function renderList(){
+  var el=document.getElementById('list'),h='';
+  pts.map(function(p,i){return {p:p,i:i};})
+    .filter(function(x){return filterOn[x.p.cls];})
+    .sort(function(a,b){return a.p.lastDays-b.p.lastDays;})
+    .forEach(function(x){var p=x.p;
+      h+='<div class="li" data-i="'+x.i+'"><span class="dot" style="background:'+CLS[p.cls].c+'"></span>'
+        +'<span class="nm">'+esc(p.name)+'</span><span class="ad">'+esc(addrShort(p.addr))+' · '+(WIN[p.win]||'')+'</span>'
+        +'<span class="last">'+(p.lastDays<=30?p.lastDays+'天前':'30天+')+'</span></div>';});
+  el.innerHTML=h||'<div style="padding:20px;text-align:center;color:#8a9490;font-size:12px">该分层暂无客户</div>';
+  el.querySelectorAll('.li').forEach(function(li){li.onclick=function(){var i=+li.getAttribute('data-i');showCard(i);map.setZoomAndCenter(15,[pts[i].lng,pts[i].lat]);};});
+}
+var filterOn={act:true,fade:true,lost:true};
+document.querySelectorAll('.fbtn[data-f]').forEach(function(b){
+  b.onclick=function(){var k=b.getAttribute('data-f');filterOn[k]=!filterOn[k];b.classList.toggle('on',filterOn[k]);
+    markers.forEach(function(mk){var show=filterOn[mk.cls]&&!txtCollapsed;if(show)mk.m.show();else mk.m.hide();if(show)mk.dot.show();else mk.dot.hide();});
+    renderList();};
+});
+/* 收起文字：只看圆点分布（点大小=近30天单量） */
+var txtCollapsed=false;
+function applyTxt(){markers.forEach(function(mk){var show=filterOn[mk.cls]&&!txtCollapsed;if(show)mk.m.show();else mk.m.hide();});
+  document.getElementById('btnTxt').textContent=txtCollapsed?'展开文字':'收起文字';}
+document.getElementById('btnTxt').onclick=function(){txtCollapsed=!txtCollapsed;applyTxt();};
+renderList();
+
+/* ===== 数据源徽标 ===== */
+var sb=document.getElementById('srcBadge');
+if(demo){sb.className='srcBadge';sb.textContent='⚠ 演示数据 '+log.length+' 条（点此清空，改用真实报单积累）';
+  sb.onclick=function(){if(confirm('清空演示配送记录？之后由主工具每次识别报单自动积累真实记录。')){localStorage.removeItem('deliveryLog');location.reload();}};}
+else{sb.className='srcBadge real';sb.textContent='✓ 真实配送记录 '+log.length+' 条'+(logMaxD?(' · 截至 '+logMaxD+'（倒查 7/14 天）'):'');}
+</script>
+</body>
+</html>

@@ -146,7 +146,20 @@
     <h1>🛵 壮壮FIT 配送助手</h1>
     <span class="sub" id="todayTag"></span>
     <span class="sub">出餐点：荣华北路69号</span>
+    <span class="sub" id="cloudStat" style="cursor:pointer" title="云端同步状态，点击配置">☁ 检查中…</span>
   </header>
+
+  <div id="cloudPanel" style="display:none;position:fixed;top:56px;right:18px;z-index:99999;background:#fff;border:1px solid #d8e0d0;border-radius:10px;padding:12px 14px;box-shadow:0 6px 24px rgba(0,0,0,.14);width:320px;font-size:13px">
+    <b>☁ 云端同步</b>（私有仓库，仅令牌可读写）<br>
+    <span style="color:#888">同步内容：客户档案 / 配送记录 / 骑手 / 定位缓存。改动自动上传；换电脑保存令牌后打开即自动拉取。</span>
+    <div style="margin:8px 0 2px">GitHub 令牌：<input id="cloudToken" type="password" placeholder="ghp_ / gho_ 开头，与客诉台账同一个" style="width:100%;box-sizing:border-box;padding:4px 6px;border:1px solid #ccc;border-radius:6px" /></div>
+    <div style="display:flex;gap:6px;margin-top:8px">
+      <button id="cloudSaveTok" type="button">保存令牌</button>
+      <button id="cloudPush" type="button">立即上传</button>
+      <button id="cloudPull" type="button">从云端拉取</button>
+    </div>
+    <div id="cloudMsg" style="margin-top:6px;color:#666"></div>
+  </div>
 
   <div class="tabs">
     <button class="tabbtn on" id="tab-plan" type="button">🛵 排线</button>
@@ -346,6 +359,84 @@ var AREA_STOPS=['四川省','成都市','武侯区','高新区','双流区','锦
 /* ===== 1. 存储（与主工具同 key，零迁移） ===== */
 function loadJSON(k,d){try{var v=JSON.parse(localStorage.getItem(k));if(v!=null)return v;}catch(e){}return d;}
 function saveJSON(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
+
+/* ===== 云端同步（私有仓库 xhs-delivery-data：客户档案/配送记录/骑手/定位缓存；令牌读写，改动自动上传，换电脑自动拉取） ===== */
+var CLOUD_API='https://api.github.com/repos/tomtang0512/xhs-delivery-data/contents/delivery-data.json';
+var CLOUD_KEYS=['customers','deliveryLog','riders','geoCache','cust_ver','custRebuilt'];
+var CLOUD_META='cloudSyncMeta';   // {dataUpdatedAt, lastSyncAt}（令牌单独存 xhs_gh_token，不上传）
+function cMeta(){try{return JSON.parse(localStorage.getItem(CLOUD_META))||{};}catch(e){return {};}}
+function cSaveMeta(m){try{localStorage.setItem(CLOUD_META,JSON.stringify(m));}catch(e){}}
+function cToken(){return localStorage.getItem('xhs_gh_token')||'';}
+function cB64(s){return btoa(unescape(encodeURIComponent(s)));}
+function cloudStat(txt){var el=document.getElementById('cloudStat');if(el)el.textContent='☁ '+txt;}
+var _cloudTimer=null;
+function cloudDirty(){   // 档案/记录有改动：记时间戳 + 防抖自动上传（关页前没传完也没关系，下次开页本地较新会补传）
+  var m=cMeta();m.dataUpdatedAt=new Date().toISOString();cSaveMeta(m);
+  if(_cloudTimer)clearTimeout(_cloudTimer);
+  _cloudTimer=setTimeout(function(){cloudPush().catch(function(e){cloudStat('同步失败');});},6000);
+}
+var _saveJSON=saveJSON;
+saveJSON=function(k,v){_saveJSON(k,v);if(CLOUD_KEYS.indexOf(k)>=0)cloudDirty();};
+function cloudPayload(){var d={};CLOUD_KEYS.forEach(function(k){d[k]=loadJSON(k,null);});return d;}
+function cloudApply(d){CLOUD_KEYS.forEach(function(k){if(d[k]!==null&&d[k]!==undefined)localStorage.setItem(k,JSON.stringify(d[k]));});}
+function cloudPull(){
+  var tk=cToken();
+  var opt=tk?{headers:{Authorization:'Bearer '+tk,Accept:'application/vnd.github.raw'}}:{cache:'no-store'};
+  return fetch(CLOUD_API+'?t='+Date.now(),opt).then(function(r){
+    if(r.status===404)return null;
+    if(!r.ok)throw new Error('云端读取失败('+r.status+')');
+    return r.json();
+  });
+}
+function cloudPush(){
+  var tk=cToken();
+  if(!tk)return Promise.reject(new Error('未配置令牌'));
+  cloudStat('同步中…');
+  return fetch(CLOUD_API+'?ref=main&t='+Date.now(),{headers:{Authorization:'Bearer '+tk,Accept:'application/vnd.github+json'}}).then(function(g){
+    if(g.ok)return g.json().then(function(j){return j.sha;});
+    if(g.status===404)return null;
+    throw new Error('云端状态检查失败('+g.status+')');
+  }).then(function(sha){
+    var body={updatedAt:new Date().toISOString(),data:cloudPayload()};
+    return fetch(CLOUD_API,{method:'PUT',headers:{Authorization:'Bearer '+tk,Accept:'application/vnd.github+json','Content-Type':'application/json'},
+      body:JSON.stringify({message:'chore: sync delivery data',content:cB64(JSON.stringify(body)),branch:'main',sha:sha||undefined})});
+  }).then(function(p){
+    if(!p.ok)return p.json().catch(function(){return {};}).then(function(j){
+      var msg='上传失败('+p.status+')'+(j.message?'：'+j.message:'');
+      if(p.status===401)msg='令牌无效或过期，请重新配置';
+      if(p.status===409)msg='云端有更新（别的设备刚写入），请先「从云端拉取」';
+      throw new Error(msg);
+    });
+    var m=cMeta();m.dataUpdatedAt=new Date().toISOString();m.lastSyncAt=m.dataUpdatedAt;cSaveMeta(m);
+    cloudStat('已同步 '+new Date().toTimeString().slice(0,5));
+    var mb=document.getElementById('cloudMsg');if(mb)mb.textContent='✅ 已上传 '+new Date().toTimeString().slice(0,5);
+  });
+}
+function cloudBoot(){
+  if(!cToken()){cloudStat('云端未配置');return;}
+  cloudStat('云端检查中…');
+  cloudPull().then(function(cloud){
+    if(!cloud||!cloud.updatedAt){   // 云端还没有数据：本地有档案就首传
+      if((loadJSON('customers',[])||[]).length){cloudPush().catch(function(){cloudStat('同步失败');});}
+      else cloudStat('云端空');
+      return;
+    }
+    var m=cMeta();
+    if(String(cloud.updatedAt)>String(m.dataUpdatedAt||'')){   // 云端较新 → 覆盖本地并刷新页面
+      cloudApply(cloud.data||{});
+      m.dataUpdatedAt=cloud.updatedAt;m.lastSyncAt=new Date().toISOString();cSaveMeta(m);
+      location.reload();
+      return;
+    }
+    if(String(m.dataUpdatedAt||'')>String(cloud.updatedAt)){cloudPush().catch(function(){cloudStat('同步失败');});return;}   // 本地较新 → 补传
+    cloudStat(m.lastSyncAt?('已同步 '+new Date(m.lastSyncAt).toTimeString().slice(0,5)):'已是最新');
+  }).catch(function(){cloudStat('云端离线');});
+}
+function cloudPanel(open){
+  var p=document.getElementById('cloudPanel');if(!p)return;
+  p.style.display=open?'block':'none';
+  if(open)document.getElementById('cloudToken').value=cToken();
+}
 try{if(window.__seedRun&&!localStorage.getItem('custRebuilt'))__seedRun();}catch(e){}   // 首次：先用周报种子重建档案（幂等）
 var customers=loadJSON('customers',[]);
 var riders=loadJSON('riders',[]);
@@ -359,6 +450,7 @@ if(!customers.length){
   customers=DEFAULT_CUSTOMERS.slice();
   saveJSON('customers',customers);
 }
+cloudBoot();   // 开页即对齐云端：云端较新拉取覆盖，本地较新自动补传
 /* 旧版假演示档案检测：含2个以上演示占位名即视为过期假种子，整档替换为真实档案（真实档案不含这些名字，不受影响） */
 (function(){
   var marks=['胡萝卜','贾梦琪','kris','李姐','小李'],hit=0;
@@ -1554,6 +1646,32 @@ function showTab(id){
 }
 TABS.forEach(function(t){document.getElementById('tab-'+t).addEventListener('click',function(){showTab(t);});});
 loadBc();
+
+/* 云端面板交互 */
+document.getElementById('cloudStat').onclick=function(){cloudPanel(true);};
+document.getElementById('cloudSaveTok').onclick=function(){
+  var v=document.getElementById('cloudToken').value.trim();
+  if(v)localStorage.setItem('xhs_gh_token',v);else localStorage.removeItem('xhs_gh_token');
+  document.getElementById('cloudMsg').textContent=v?'✅ 令牌已保存':'已清除令牌';
+  cloudBoot();
+};
+document.getElementById('cloudPush').onclick=function(){
+  document.getElementById('cloudMsg').textContent='上传中…';
+  cloudPush().catch(function(e){document.getElementById('cloudMsg').textContent='⚠ '+e.message;});
+};
+document.getElementById('cloudPull').onclick=function(){
+  document.getElementById('cloudMsg').textContent='拉取中…';
+  cloudPull().then(function(cloud){
+    if(!cloud){document.getElementById('cloudMsg').textContent='云端还没有数据';return;}
+    cloudApply(cloud.data||{});
+    var m=cMeta();m.dataUpdatedAt=cloud.updatedAt;m.lastSyncAt=new Date().toISOString();cSaveMeta(m);
+    location.reload();
+  }).catch(function(e){document.getElementById('cloudMsg').textContent='⚠ '+e.message;});
+};
+document.addEventListener('click',function(e){   // 点面板外收起
+  var p=document.getElementById('cloudPanel');
+  if(p.style.display==='block'&&!p.contains(e.target)&&e.target.id!=='cloudStat')cloudPanel(false);
+});
 
 /* ============================================================
    8. 接单判断（距离/加价/时间窗/成趟几率/顺路路线，真实路网）

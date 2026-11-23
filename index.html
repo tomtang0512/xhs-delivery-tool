@@ -172,7 +172,8 @@
   <div class="card" id="paramCard">
     <div class="params">
       <span class="sessBadge" id="sessBadge"></span>
-      <label>出发 <input type="time" id="depart" value="10:55"></label>
+      <label title="午窗（午餐）出发时刻">🌞午 <input type="time" id="depart" value="10:55"></label>
+<label title="晚窗（晚餐）出发时刻">🌙晚 <input type="time" id="departD" value="16:55"></label>
       <span>骑手 <span id="riderBox" class="row" style="gap:5px"></span><span class="mut" style="font-size:11px">勾多位=并行同发，只勾1位=接力</span></span>
       <details style="margin-left:auto"><summary class="mut" style="cursor:pointer">高级参数</summary>
         <div class="row" style="margin-top:6px">
@@ -524,10 +525,7 @@ function afterParse(){
   document.getElementById('parseStat').textContent='识别完成：可排 '+nOk+' · 存疑 '+amb.length+' · 定位失败 '+fail.length;
 renderConfirm();
 var needConfirm=amb.length||fail.length;
-// 出发时刻按订单时段覆写：纯晚窗 16:55、其余 10:55（页面常显可改）
-(function(){var aD=rptRows.some(function(r){return (r.st||'l')==='d'&&!r.fail;}),aL=rptRows.some(function(r){return (r.st||'l')==='l'&&!r.fail;});
-document.getElementById('depart').value=(aD&&!aL)?'16:55':'10:55';})();
-document.getElementById('confirmCard').style.display=needConfirm?'':'none';
+document.getElementById('confirmCard').style.display=needConfirm?'':'none';   // 早晚窗出发时刻各自独立输入（🌞午10:55 / 🌙晚16:55），不再整体覆写
   if(!needConfirm){toast('识别无存疑，直接排线');runPlan(rptRows.filter(function(r){return r.checked&&!r.fail;}));}
 }
 function renderConfirm(){
@@ -603,7 +601,8 @@ function runPlan(rows){
   if(added){saveJSON('customers',customers);renderClist();toast('新客入库 '+added+' 家（已进档案，下次自动按老客匹配）');}
   var anyD=rows.some(function(r){return (r.st||'l')==='d';});
   var anyL=rows.some(function(r){return (r.st||'l')==='l';});
-  var depart=document.getElementById('depart').value||((anyD&&!anyL)?'16:55':'10:55');
+  var departL=document.getElementById('depart').value||'10:55';   // 午窗出发
+  var departD=document.getElementById('departD').value||'16:55';  // 晚窗出发（独立可改）
   var maxTrip=+document.getElementById('maxTrip').value||90;
   var speed=(function(){var rs=selRiders(),sp=0,n=0;rs.forEach(function(r){if(r.speed){sp+=r.speed;n++;}});return n?sp/n:20;})();
   var selRs=selRiders();
@@ -629,7 +628,7 @@ function runPlan(rows){
   document.getElementById('sessBadge')._st=sess;
   document.getElementById('sessBadge').textContent='🧾 '+(sess==='all'?('午窗 '+min2hm(endBy.l||750)+' / 晚窗 '+min2hm(endBy.d||1110)+'，午/晚分窗各排'):(sess==='dinner'?('晚窗 · 截止 '+min2hm(endBy.d||1110)):('午窗 · 截止 '+min2hm(endBy.l||750))));
   var lunchEnd=endBy.l||hm2min('12:30'),dinnerEnd=endBy.d||hm2min('18:30');
-  var departMin=hm2min(depart)||(sess==='dinner'?hm2min('16:55'):hm2min('10:55'));
+  var departMin=hm2min(sess==='dinner'?departD:departL)||(sess==='dinner'?hm2min('16:55'):hm2min('10:55'));
   var winEndMin=(sess==='dinner')?dinnerEnd:(sess==='lunch')?lunchEnd:Math.min(lunchEnd,dinnerEnd);
   var ride=function(a,b){return km(a,b)*ROAD_K/speed*60;};
   var risks=[];
@@ -673,7 +672,7 @@ function runPlan(rows){
   var departMin=depIn;
   if(sk==='d'&&departMin<hm2min('16:00'))departMin=hm2min('16:55');
   if(sk==='l'&&departMin>hm2min('13:00'))departMin=hm2min('10:55');
-  if(writeInput)document.getElementById('depart').value=min2hm(departMin);
+  if(writeInput)document.getElementById(sk==='d'?'departD':'depart').value=min2hm(departMin);   // 写回各自的窗
   var groups=mainPts.filter(function(mp){return (mp.st||'l')===sk;});
   var merged=[];
   groups.forEach(function(mp){
@@ -699,7 +698,7 @@ if(departMin+need>g1.dlm+tol1){list.push({g:g1,latest:g1.dlm+tol1-need});groups.
 return list;}
   var tight=tightPass();
   if(tight.length){var snapDep=1e9;tight.forEach(function(w){if(w.latest<snapDep)snapDep=w.latest;});
-    if(snapDep>0&&snapDep>=departMin-15){tight.forEach(function(w){groups.push(w.g);});departMin=Math.floor(snapDep);if(writeInput)document.getElementById('depart').value=min2hm(departMin);tight=tightPass();}}
+    if(snapDep>0&&snapDep>=departMin-15){tight.forEach(function(w){groups.push(w.g);});departMin=Math.floor(snapDep);if(writeInput)document.getElementById(sk==='d'?'departD':'depart').value=min2hm(departMin);tight=tightPass();}}
   tight.forEach(function(w){risks.push({lv:'r',txt:'<b>#'+escHtml(glabel(w.g))+'</b>（'+(sk==='d'?'晚窗':'午窗')+'）时限 '+min2hm(w.g.dlm)+' 来不及：需最晚 <b>'+min2hm(w.latest)+'</b> 出发 —— 建议单独提前送/自送/与客户改约'});});
   excluded.forEach(function(r){risks.push({lv:'y',txt:'#'+r.no+' '+escHtml(r.user)+' 在另一时段，本次未排（午/晚分窗各跑一次）'});});
   var n=groups.length;
@@ -1197,7 +1196,7 @@ if(dk6<=0.5)risks.push({lv:'y',txt:'<b>'+escHtml(glabel(groups[i6]))+'</b> 与 <
   }
   // —— 会话编排：午/晚分窗串行，结果合并渲染 ——
   var sessions=[];
-  var sessList=(sess==='all')?[{sk:'l',dep:departMin,w:false},{sk:'d',dep:hm2min('16:55'),w:false}]
+  var sessList=(sess==='all')?[{sk:'l',dep:hm2min(departL)||hm2min('10:55'),w:false},{sk:'d',dep:hm2min(departD)||hm2min('16:55'),w:false}]
                              :[{sk:(sess==='dinner')?'d':'l',dep:departMin,w:true}];
   (function runNext(i){
     if(i>=sessList.length){

@@ -1314,10 +1314,11 @@ function renderResult(){
 function tripCopyText(ti){
   var P=planOut,tr=P.trips[ti],v=tr._v;
   var no=P.trips.slice(0,ti).filter(function(t){return t.sess===tr.sess;}).length+1;
-  var lines=['@'+((tr.rider&&tr.rider.name)||'骑手')+' 第'+no+'趟 '+min2hm(tr.dep)+'出发｜'+tr.seg.length+'点'+v.meals+'餐｜全线'+v.kmOut.toFixed(1)+'km 约'+v.dur+'分｜'+min2hm(v.fin0)+'送完 '+min2hm(v.fin)+'回店｜班价'+v.rp.p+'元'];
+  var lines=[((tr.rider&&tr.rider.name)||'骑手')+'，这一趟大概'+v.kmOut.toFixed(1)+'公里，'+tr.seg.length+'个点位，一趟'+v.rp.p+'元，需要'+min2hm(tr.dep)+'到店；地址含以下：'];
   tr.seg.forEach(function(gi,q){
     var g=P.groups[gi];
     lines.push((q+1)+'）'+g.names.map(function(m){return m.name;}).join('+')+' '+g.meals+'餐（'+min2hm(v.etas[q].t)+'到）');});
+  lines.push('🌹');
   return lines.join('\n');
 }
 function copyTrip(ti){

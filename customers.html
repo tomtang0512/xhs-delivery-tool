@@ -186,6 +186,14 @@ function heatR(n){return 4.5+10*Math.sqrt(n/maxN);}
 
 /* ===== 地图 ===== */
 var map=new AMap.Map('map',{zoom:12,center:[104.07,30.57],viewMode:'2D',mapStyle:'amap://styles/dark'});
+// 容器尺寸变化（父页「⛶ 大地图」切换）后重算地图视口
+window.__fitMap=function(){
+  var box=document.getElementById('map');
+  try{map.resize&&map.resize();}catch(e){}
+  try{map.setSize&&map.setSize(new AMap.Size(box.clientWidth,box.clientHeight));}catch(e2){}
+  try{map.panBy(1,0);map.panBy(-1,0);}catch(e3){}   // 强制重绘铺满新尺寸
+};
+if(window.ResizeObserver){try{new ResizeObserver(function(){window.__fitMap();}).observe(document.getElementById('map'));}catch(e){}}
 new AMap.Circle({center:ORIGIN,radius:3000,strokeColor:'#27ae60',strokeWeight:1,strokeOpacity:.5,strokeStyle:'dashed',fillColor:'#27ae60',fillOpacity:.04,map:map});
 new AMap.Marker({position:ORIGIN,map:map,content:'<div style="background:#c0392b;color:#fff;padding:3px 10px;border-radius:12px;font-size:12px;white-space:nowrap">🍳 出餐点</div>',anchor:'center',zIndex:300});
 var markers=[];

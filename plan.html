@@ -97,7 +97,8 @@
       <span class="sessBadge" id="sessBadge"></span>
       <label title="午窗（午餐）出发时刻">🌞午 <input type="time" id="depart" value="10:55"></label>
 <label title="晚窗（晚餐）出发时刻">🌙晚 <input type="time" id="departD" value="16:55"></label>
-      <span>骑手 <span id="riderBox" class="row" style="gap:5px"></span><span class="mut" style="font-size:11px">勾多位=并行同发，只勾1位=接力</span></span>
+      <span title="勾多位=并行同发（一人一趟），只勾1位=接力顺序班（仅管午窗）">🌞午骑手 <span id="riderBox" class="row" style="gap:5px"></span></span>
+<span title="晚窗骑手单独勾选：勾多位=并行同发，只勾1位=接力">🌙晚骑手 <span id="riderBoxD" class="row" style="gap:5px"></span></span>
       <details style="margin-left:auto"><summary class="mut" style="cursor:pointer">高级参数</summary>
         <div class="row" style="margin-top:6px">
           <label>单班上限 <input type="number" id="maxTrip" value="90" min="15" max="180" style="width:52px;border:1px solid var(--line);border-radius:6px;padding:2px 4px">分</label>
@@ -414,9 +415,10 @@ function runPlan(rows){
   var departL=document.getElementById('depart').value||'10:55';   // 午窗出发
 var departD=document.getElementById('departD').value||'16:55';  // 晚窗出发（独立可改）
   var maxTrip=+document.getElementById('maxTrip').value||90;
-  var speed=(function(){var rs=selRiders(),sp=0,n=0;rs.forEach(function(r){if(r.speed){sp+=r.speed;n++;}});return n?sp/n:20;})();
-  var selRs=selRiders();
-  var round=(selRs.length===1);   // v3 demo：单骑手=接力顺序班，多骑手=并行班
+  function calcSpeed(win){var rs=selRiders(win),sp=0,n=0;rs.forEach(function(r){if(r.speed){sp+=r.speed;n++;}});return n?sp/n:20;}
+  var speedL=calcSpeed('l'),speedD=calcSpeed('d');   // 两窗骑手可不同，均速分开算
+  var selRsL=selRiders('l'),selRsD=selRiders('d');   // 早晚窗骑手分开勾选
+  var round=(selRsL.length===1);   // v3 demo：单骑手=接力顺序班，多骑手=并行班（窗内各自判定，趟上带 sd.round）
   // —— 时段/截止汇总 ——
   var oMeals={},oDlmS={},oEaW={},oEaS={},oHas={},oNames={},sessCnt={l:0,d:0},endBy={l:null,d:null};
   rows.forEach(function(r){
@@ -440,7 +442,6 @@ var departD=document.getElementById('departD').value||'16:55';  // 晚窗出发�
   var lunchEnd=endBy.l||hm2min('12:30'),dinnerEnd=endBy.d||hm2min('18:30');
   var departMin=hm2min(sess==='dinner'?departD:departL)||(sess==='dinner'?hm2min('16:55'):hm2min('10:55'));
   var winEndMin=(sess==='dinner')?dinnerEnd:(sess==='lunch')?lunchEnd:Math.min(lunchEnd,dinnerEnd);
-  var ride=function(a,b){return km(a,b)*ROAD_K/speed*60;};
   var risks=[];
   // —— 自提单：不参与排线 ——
   rows=rows.filter(function(r){
@@ -483,6 +484,10 @@ var departD=document.getElementById('departD').value||'16:55';  // 晚窗出发�
   if(sk==='d'&&departMin<hm2min('16:00'))departMin=hm2min('16:55');
   if(sk==='l'&&departMin>hm2min('13:00'))departMin=hm2min('10:55');
   if(writeInput)document.getElementById(sk==='d'?'departD':'depart').value=min2hm(departMin);   // 写回各自的窗
+  var selRs=(sk==='d')?selRsD:selRsL;              // 本窗骑手（早晚分开勾选）
+  var speed=(sk==='d')?speedD:speedL;              // 本窗均速
+  var round=(selRs.length===1);                    // 本窗单骑手=接力，多骑手=并行
+  var ride=function(a,b){return km(a,b)*ROAD_K/speed*60;};
   var groups=mainPts.filter(function(mp){return (mp.st||'l')===sk;});
   var merged=[];
   groups.forEach(function(mp){
@@ -1023,7 +1028,7 @@ if(dk6<=0.5)risks.push({lv:'y',txt:'<b>'+escHtml(glabel(groups[i6]))+'</b> 与 <
         totKm+=s.totKm;totMeals+=s.totMeals;apiFail=apiFail||s.apiFail;
       });
       if(!allT.length){document.getElementById('result').innerHTML='<div class="risk r">没有可排的趟（全部建议跑腿/自送，见上方提示）。</div>';document.getElementById('paramCard').style.display='';return;}
-      planOut={trips:allT,groups:allG,totKm:totKm,totMeals:totMeals,apiFail:apiFail,round:round,selRs:selRs,risks:risks,mapLegs:allML,sessions:outs,fin:outs[outs.length-1].fin};
+      planOut={trips:allT,groups:allG,totKm:totKm,totMeals:totMeals,apiFail:apiFail,round:round,selRs:selRsL,risks:risks,mapLegs:allML,sessions:outs,fin:outs[outs.length-1].fin};
       renderResult();return;}
     planSession(sessList[i].sk,sessList[i].dep,sessList[i].w,function(out){sessions.push(out);runNext(i+1);});
   })(0);
@@ -1062,7 +1067,7 @@ function renderResult(){
         +'<td class="eta">'+min2hm(eta.t)+' '+(eta.t<=g.dlm?'<span style="color:var(--g)">✓</span>':'<span style="color:var(--red)">⚠️</span>')
         +'<small>截止 '+min2hm(g.dlm)+' · '+ets+'</small></td></tr>';}).join('');
     html+='<div class="trip" style="--tc:'+col+'">'
-      +'<div class="head"><span class="t">🛵 第'+sessNo[prevS]+'趟'+(sd.trips.length>1&&!P.round&&tr.dep<=sd.dep+0.5?'（并行同发）':(!P.round&&tr.dep>sd.dep+0.5?'（顺路补趟）':''))+'</span>'
+      +'<div class="head"><span class="t">🛵 第'+sessNo[prevS]+'趟'+(sd.trips.length>1&&!sd.round&&tr.dep<=sd.dep+0.5?'（并行同发）':(!sd.round&&tr.dep>sd.dep+0.5?'（顺路补趟）':''))+'</span>'
       +'<span>'+(tr.rider?'👤 <b>'+escHtml(tr.rider.name)+'</b>':'👤 未分派')+'</span>'
       +'<span class="m">⏱ 出发 <b>'+min2hm(tr.dep)+'</b>（最晚 '+min2hm(tr.latest)+'）· '+v.meals+'餐'+tr.seg.length+'点 · 约'+v.dur+'分 · '+min2hm(v.fin0)+'送完 · '+min2hm(v.fin)+'回店</span></div>'
       +'<table>'+rowsHtml+'</table>'
@@ -1259,18 +1264,24 @@ document.getElementById('mapToggle').onclick=function(){
 };
 
 /* 骑手 chips */
-function selRiders(){return riders.filter(function(r){return r._on;});}
+function selRiders(win){return riders.filter(function(r){return win==='d'?(!!r._onD):(!!r._on);});}
 function renderRiders(){
-  var box=document.getElementById('riderBox');box.innerHTML='';
+  var box=document.getElementById('riderBox'),boxD=document.getElementById('riderBoxD');
+  if(!box)return;box.innerHTML='';if(boxD)boxD.innerHTML='';
 riders.forEach(function(r){
 var s=document.createElement('span');s.className='rchip'+(r._on?' on':'');
 s.innerHTML=escHtml(r.name);
-s.title='点击勾选/取消：勾多位=并行同发（一人一趟），只勾1位=接力顺序班';
+s.title='午窗：点击勾选/取消：勾多位=并行同发（一人一趟），只勾1位=接力顺序班';
 s.onclick=function(){r._on=!r._on;renderRiders();};
-box.appendChild(s);});
+box.appendChild(s);
+if(boxD){var s2=document.createElement('span');s2.className='rchip'+(r._onD?' on':'');
+s2.innerHTML=escHtml(r.name);
+s2.title='晚窗：点击勾选/取消，与午窗独立';
+s2.onclick=function(){r._onD=!r._onD;renderRiders();};
+boxD.appendChild(s2);}});
 }
 renderRiders();
-if(riders[0])riders[0]._on=true,renderRiders();
+if(riders[0]){riders[0]._on=true;riders[0]._onD=true;renderRiders();}
 </script>
 </body>
 </html>

@@ -1075,7 +1075,9 @@ function renderResult(){
     html+='<div class="trip" style="--tc:'+col+'">'
       +'<div class="head"><span class="t">🛵 第'+sessNo[prevS]+'趟'+(sd.trips.length>1&&!sd.round&&tr.dep<=sd.dep+0.5?'（并行同发）':(!sd.round&&tr.dep>sd.dep+0.5?'（顺路补趟）':''))+'</span>'
       +'<span>'+(tr.rider?'👤 <b>'+escHtml(tr.rider.name)+'</b>':'👤 未分派')+'</span>'
-      +'<span class="m">⏱ 出发 <b>'+min2hm(tr.dep)+'</b>（最晚 '+min2hm(tr.latest)+'）· '+v.meals+'餐'+tr.seg.length+'点 · 约'+v.dur+'分 · '+min2hm(v.fin0)+'送完 · '+min2hm(v.fin)+'回店</span></div>'
+      +'<span class="m">⏱ 出发 <b>'+min2hm(tr.dep)+'</b>（最晚 '+min2hm(tr.latest)+'）'
++(tr.dep>sd.dep+0.5?'<span class="tip" title="减少在客户门口等窗口的白等、并守住90分保温线；你可改回设定时刻但会更慢更不保温">⏳ 较设定 '+min2hm(sd.dep)+' 自动延后 '+Math.round(tr.dep-sd.dep)+' 分</span>':'')
++' · '+v.meals+'餐'+tr.seg.length+'点 · 约'+v.dur+'分 · '+min2hm(v.fin0)+'送完 · '+min2hm(v.fin)+'回店</span></div>'
       +'<table>'+rowsHtml+'</table>'
       +(v.late?'<div style="padding:4px 12px" class="warnInline">⚠️ 实测这趟有晚点风险，建议提前出发或把末点挪给别的趟</div>':'')
       +'<div class="foot"><button class="btn-line" data-copy="'+ti+'">📋 复制发骑手文案</button>'

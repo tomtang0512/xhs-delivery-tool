@@ -227,7 +227,10 @@
   <div class="tabpane" id="pane-cust">
     <div class="card">
       <div class="step"><span class="no">👥</span><b>客户档案</b><span class="tip">共 <span id="cnum">0</span> 家｜地图上点位=客户，颜色=近期活跃度；下「编辑/删除/批量」可管理</span></div>
-      <iframe id="custMap" src="customers.html" title="客户分层地图" loading="lazy" style="width:100%;height:540px;border:1px solid var(--line);border-radius:12px;background:#f4f6f5;display:block;margin:6px 0 4px"></iframe>
+      <div style="position:relative">
+        <iframe id="custMap" src="customers.html" title="客户分层地图" loading="lazy" style="width:100%;height:540px;border:1px solid var(--line);border-radius:12px;background:#f4f6f5;display:block;margin:6px 0 4px"></iframe>
+        <button id="custExpand" type="button" class="btn-line" style="position:absolute;top:14px;right:14px;z-index:5;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.18)">⛶ 大地图</button>
+      </div>
       <details id="clistDrop" style="margin-top:4px">
         <summary style="cursor:pointer;font-weight:bold;color:var(--g);padding:6px 2px">✏️ 展开客户列表（编辑 / 删除 / 批量管理）</summary>
       <div id="clist" class="clist" style="margin-top:6px"></div>
@@ -1870,6 +1873,20 @@ document.getElementById('creset').onclick=function(){
   if(!confirm('恢复为周报重建的默认客户列表？当前自定义增改会被覆盖。'))return;
   customers=DEFAULT_CUSTOMERS.slice();saveJSON('customers',customers);renderClist();
   toast('已恢复默认档案（周报点位 '+customers.length+' 家）');
+};
+// —— 客户地图一键展开大地图（fixed 全屏覆盖，手机/电脑通用；切换后通知 iframe 内地图重算尺寸） ——
+document.getElementById('custExpand').onclick=function(){
+  var f=document.getElementById('custMap');
+  if(f._big){
+    f._big=false;f.setAttribute('style',f._oldCss||'');
+    this.textContent='⛶ 大地图';this.style.position='absolute';this.style.top='14px';this.style.right='14px';this.style.zIndex='5';
+  }else{
+    f._big=true;f._oldCss=f.getAttribute('style')||'';
+    f.setAttribute('style','position:fixed;inset:0;width:100vw;height:100vh;z-index:99999;border:0;border-radius:0;background:#111;display:block');
+    this.textContent='✕ 收起大地图';
+    this.style.position='fixed';this.style.top='12px';this.style.right='12px';this.style.zIndex='100000';
+  }
+  try{var w=f.contentWindow;if(w&&w.__fitMap)w.__fitMap();}catch(e){}
 };
 renderClist();
 // 报单原文粘贴进批量名单时的垃圾行识别（电话/菜品/统计行等，不是真实客户）

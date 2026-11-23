@@ -205,9 +205,10 @@ function parseRptText(raw){
     if((m=L.match(/[-—=]{2,}\s*(.+?\d.+?)\s*[-—=]{2,}/))){push();group=m[1];continue;}   // 分隔线≥2个符号即可（粘贴常丢字：--17:00 - 17:45-----），段内须含数字防误判
     if(/^(上午|中午|下午|晚上)/.test(L)&&L.indexOf('：')>-1&&L.indexOf('#')<0){push();group=L;continue;}
     var Lc=L.replace(/^[^\u4e00-\u9fa5A-Za-z0-9#【（(]+/,'');   // 剥掉 ⭕⭐🔥 等任意前缀符号
-    if((m=Lc.match(/^#(\d+)\s*（([^）]*)）?/))){push();cur={no:+m[1],tag:m[2]||'',dishes:[],group:group};continue;}
-    if((m=Lc.match(/^#(\d+)/))){push();cur={no:+m[1],tag:'',dishes:[],group:group};continue;}
+    if((m=Lc.match(/^#(\d+)\s*（([^）]*)）?/))){push();cur={no:+m[1],tag:m[2]||'',dishes:[],group:group,raw:[L]};continue;}
+    if((m=Lc.match(/^#(\d+)/))){push();cur={no:+m[1],tag:'',dishes:[],group:group,raw:[L]};continue;}
     if(!cur){var mm=L.match(/^(PRO碗|EASY碗|鲜蔬锅)\s*(\d+)\s*个?$/);if(mm)stats[mm[1]]=(stats[mm[1]]||0)+(+mm[2]);continue;}
+    if(cur)cur.raw.push(L);   // 保留报单原文（发骑手文案用：师傅要看电话/地址）
     if(/^(用户|电话|地址|本餐备注|特殊备注|整单备注)[：:]/.test(L)){
       var k=L.match(/^(用户|电话|地址|本餐备注|特殊备注|整单备注)/)[1],v=L.replace(/^(用户|电话|地址|本餐备注|特殊备注|整单备注)[：:]/,'').trim();
       if(k==='用户')cur.user=v;else if(k==='电话')cur.phone=v;else if(k==='地址')cur.addr=v;else if(k==='整单备注')cur.memo=v;else cur.note=v;
@@ -301,7 +302,7 @@ document.getElementById('btnParse').onclick=function(){
     if(!st&&o.dlMin!=null)st=o.dlMin>=hm2min('15:00')?'d':'l';
     var sp=/自提/.test(o.addr||'');   // 自提单：不定位不排线
     var mc=(!sp&&o.user)?matchCustIdx(o.user,o.addr):null;
-    return {no:o.no,user:o.user||'',addr:o.addr||'',meals:o.meals,winS:o.winS,winE:o.winE,
+    return {no:o.no,user:o.user||'',addr:o.addr||'',meals:o.meals,winS:o.winS,winE:o.winE,raw:o.raw||[],
             dlMin:o.dlMin,dlMemo:o.dlMemo,eaWanted:o.eaWanted,group:o.group,st:st,sp:sp,
             match:mc,pos:(!sp&&mc&&mc.c.lng!=null&&mc.c.lat!=null?[mc.c.lng,mc.c.lat]:null),checked:true,fail:false};
   });
@@ -477,8 +478,8 @@ var departD=document.getElementById('departD').value||'16:55';  // 晚窗出发�
     if(oEaW[key2]!=null)ea=Math.max(ea,oEaW[key2]);  // 备注「不早于/希望X送到」
     var cxMax='normal',cxOrder={easy:0,normal:1,hard:2};   // 组内取最难：交接停留按最难点的档计（电梯难等会拉长全程，必须计入才能保证不超时）
     rs2.forEach(function(r){var c=(r.cx||(r.match&&r.match.c&&r.match.c.cx)||'normal');if(cxOrder[c]!=null&&cxOrder[c]>cxOrder[cxMax])cxMax=c;});
-    mainPts.push({name:(function(){var ns=(oNames[key2]||[]).filter(function(x){return x&&String(x).trim();});return ns.length?ns.join('+'):(head.user||head.addr||('#'+head.no+'单'));})(),
-      addr:head.addr,pos:head.pos,
+mainPts.push({name:(function(){var ns=(oNames[key2]||[]).filter(function(x){return x&&String(x).trim();});return ns.length?ns.join('+'):(head.user||head.addr||('#'+head.no+'单'));})(),
+addr:head.addr,pos:head.pos,rows:rs2,
       dlm:dlm,ea:ea,m:m,min:CX_MIN[cxMax],cx:cxMax,st:st});
   });
   function customerIdOf(r){return r.match?('c'+r.match.i):('n'+r.no);}
@@ -498,8 +499,8 @@ var departD=document.getElementById('departD').value||'16:55';  // 晚窗出发�
   groups.forEach(function(mp){
     var g=null;
     for(var gi=0;gi<merged.length;gi++){if(km(mp.pos,merged[gi].pos)<=MERGE_KM){g=merged[gi];break;}}
-    if(g){g.names.push(mp);g.min=Math.max(g.min,mp.min);g.dlm=Math.min(g.dlm,mp.dlm);g.meals+=mp.m;g.ea=Math.max(g.ea,mp.ea);}
-    else merged.push({pos:mp.pos,names:[mp],min:mp.min,dlm:mp.dlm,meals:mp.m,ea:mp.ea,rep:1});
+if(g){g.names.push(mp);g.rows=(g.rows||[]).concat(mp.rows||[]);g.min=Math.max(g.min,mp.min);g.dlm=Math.min(g.dlm,mp.dlm);g.meals+=mp.m;g.ea=Math.max(g.ea,mp.ea);}
+else merged.push({pos:mp.pos,names:[mp],rows:(mp.rows||[]),min:mp.min,dlm:mp.dlm,meals:mp.m,ea:mp.ea,rep:1});
   });
   groups=merged;
   groups.forEach(function(g){if(g.ea>g.dlm)g.ea=0;});
@@ -1115,7 +1116,9 @@ function tripCopyText(ti){
   var lines=[((tr.rider&&tr.rider.name)||'骑手')+'，这一趟大概'+v.kmOut.toFixed(1)+'公里，'+tr.seg.length+'个点位，一趟'+v.rp.p+'元，需要'+min2hm(tr.dep)+'到店；地址含以下：'];
   tr.seg.forEach(function(gi,q){
     var g=P.groups[gi];
-    lines.push((q+1)+'）'+g.names.map(function(m){return m.name;}).join('+')+' '+g.meals+'餐（'+min2hm(v.etas[q].t)+'到）');});
+    var raws=[];(g.rows||[]).forEach(function(r){if(r.raw&&r.raw.length)raws.push(r.raw.join('\n'));});   // 报单原文块（含电话/地址/备注）
+    lines.push((q+1)+'）'+(raws.length?raws.join('\n'):g.names.map(function(m){return m.name;}).join('+')+' '+g.meals+'餐（'+min2hm(v.etas[q].t)+'到）'));
+  });
   lines.push('🌹');
   return lines.join('\n');
 }

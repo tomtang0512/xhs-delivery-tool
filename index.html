@@ -153,6 +153,7 @@
     <button class="tabbtn" id="tab-judge" type="button">📏 接单判断</button>
     <button class="tabbtn" id="tab-cust" type="button">👥 客户</button>
     <button class="tabbtn" id="tab-week" type="button">📊 周报</button>
+    <button class="tabbtn" id="tab-case" type="button">📋 客诉</button>
     <button class="tabbtn" id="tab-help" type="button">📖 说明</button>
   </div>
 
@@ -286,6 +287,14 @@
         <div class="wk-foot" id="wk-foot"></div>
       </div>
     </details>
+  </div>
+
+  <!-- ===================== 客诉（badcase-tracker 整合） ===================== -->
+  <div class="tabpane" id="pane-case">
+    <div class="card">
+      <div class="step"><span class="no">📋</span><b>食安售后客诉台账</b><span class="tip">与 badcase-tracker 云端实时同步｜记录时填「客户名」，排线趟卡与客户地图会自动标记客诉史（历史未填客户名的记录不参与匹配）</span></div>
+      <iframe id="caseFrame" src="https://tomtang0512.github.io/badcase-tracker/" title="食安售后客诉台账" loading="lazy" style="width:100%;height:840px;border:1px solid var(--line);border-radius:12px;background:#fff;display:block;margin:6px 0 4px"></iframe>
+    </div>
   </div>
 
   <!-- ===================== 说明 ===================== -->
@@ -1268,7 +1277,7 @@ function renderResult(){
       else if(eGap>EARLY_TOL){mark=' <span style="color:#d9a441">🕐 早到'+eGap+'分'+(g.okE!=null?'·已确认':'·<b>待你确认</b>')+'</span>';
         if(g.okE==null)asks.push({key:tr.sess+'|'+glabelOf(g),nm:(tr.sess==='d'?'晚窗':'午窗')+' '+glabelOf(g),kind:'e',gap:eGap,disp:'早到 '+eGap+' 分',plan:min2hm(eta.t),ref:'最早可送 '+min2hm(g.lo)});}
       var ets=eta.t<=g.dlm?('✓ 剩'+left+'分'):('⚠️ 晚'+lGap+'分');
-      return '<tr><td class="seq">'+(q+1)+'</td><td><b>'+escHtml(glabelOf(g))+'</b>'
+      return '<tr><td class="seq">'+(q+1)+'</td><td><b>'+escHtml(glabelOf(g))+'</b>'+bcMark(g.names)
         +(g.names.length>1?'<span class="mut">（同址并点 '+g.names.length+' 户）</span>':'')
         +'<br><span class="mut">'+escHtml(g.names[0].addr||'')+'</span>'+mark+'</td>'
         +'<td style="text-align:center;white-space:nowrap">'+g.meals+'餐</td>'
@@ -1313,6 +1322,33 @@ function renderResult(){
   renderRef();
   showMap(-1);
   function glabelOf(g){return g.names.map(function(m){return m.name;}).join('+');}
+}
+
+/* ===== 客诉联动（badcase-tracker 云端 data.json，仅匹配填了客户名的记录） ===== */
+var BC_URL='https://tomtang0512.github.io/badcase-tracker/data.json';
+var bcMap={};   // 客户名 -> {n, last, tps:[]}
+function loadBc(){
+  fetch(BC_URL+'?t='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.json():null;}).then(function(d){
+    if(!d||!Array.isArray(d.records))return;
+    bcMap={};
+    d.records.forEach(function(rc){
+      var nm=String(rc.customerName||'').trim();if(!nm)return;
+      var b=bcMap[nm]||(bcMap[nm]={n:0,last:'',tps:[]});
+      b.n++;
+      if(String(rc.date||'')>b.last)b.last=String(rc.date||'');
+      var t=String(rc.type||'').split('·').pop().trim();if(t&&b.tps.indexOf(t)<0)b.tps.push(t);
+    });
+    if(planOut)renderResult();   // 已有排线结果时重渲染补风险标
+  }).catch(function(){});
+}
+function bcMark(names){
+  var hits=[],n=0;
+  (names||[]).forEach(function(m){var b=bcMap[m.name];if(b){hits.push({nm:m.name,b:b});n+=b.n;}});
+  if(!hits.length)return '';
+  var tt='客诉史（仅统计填了客户名的记录）：'+hits.map(function(h){
+    return h.nm+' '+h.b.n+'次（最近'+h.b.last.slice(5)+' '+h.b.tps.slice(0,3).join('/')+'）';
+  }).join('；');
+  return ' <span style="color:#e4572e;font-weight:bold" title="'+escHtml(tt)+'">🔥 重点核对</span>';
 }
 function tripCopyText(ti){
   var P=planOut,tr=P.trips[ti],v=tr._v;
@@ -1499,7 +1535,7 @@ if(riders[0]){riders[0]._on=true;riders[0]._onD=true;renderRiders();}
 /* ============================================================
    7. 页签切换
    ============================================================ */
-var TABS=['plan','judge','cust','week','help'];
+var TABS=['plan','judge','cust','week','case','help'];
 function showTab(id){
   TABS.forEach(function(t){
     document.getElementById('pane-'+t).classList.toggle('on',t===id);
@@ -1510,6 +1546,7 @@ function showTab(id){
   window.scrollTo(0,0);
 }
 TABS.forEach(function(t){document.getElementById('tab-'+t).addEventListener('click',function(){showTab(t);});});
+loadBc();
 
 /* ============================================================
    8. 接单判断（距离/加价/时间窗/成趟几率/顺路路线，真实路网）

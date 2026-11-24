@@ -370,7 +370,7 @@ function afterParse(){
 renderConfirm();
 var needConfirm=amb.length||fail.length;
 document.getElementById('confirmCard').style.display=needConfirm?'':'none';   // 早晚窗出发时刻各自独立输入（🌞午10:55 / 🌙晚16:55），不再整体覆写
-  if(!needConfirm){toast('识别无存疑，直接排线');runPlan(rptRows.filter(function(r){return r.checked&&!r.fail;}));}
+  if(!needConfirm){var selAuto=rptRows.filter(function(r){return r.checked&&!r.fail;});_rowsForReplan=selAuto;toast('识别无存疑，直接排线');runPlan(selAuto);}
 }
 function renderConfirm(){
   var box=document.getElementById('confirmList');box.innerHTML='';
@@ -1347,7 +1347,7 @@ if(pool)bindDrop(pool,null,true);
       _askMap[key]=_askMap[key]||{};
       if(kind==='e')_askMap[key].e=yes?Math.max(gap,(_askMap[key].e>0?_askMap[key].e:0)):-1;
       else _askMap[key].l=yes?Math.max(gap,(_askMap[key].l>0?_askMap[key].l:0)):-1;});
-    if(_rowsForReplan){toast('按你的拍板重排中…');runPlan(_rowsForReplan);}};
+    if(_rowsForReplan){toast('按你的拍板重排中…');runPlan(_rowsForReplan);}else toast('请先重新解析报单，再拍板重排');};
   document.getElementById('paramCard').style.display='';
   renderRef();
   showMap(-1);

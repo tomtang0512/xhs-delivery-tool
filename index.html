@@ -191,7 +191,8 @@
         <div class="row" style="margin-top:6px">
           <label>单班上限 <input type="number" id="maxTrip" value="90" min="15" max="180" style="width:52px;border:1px solid var(--line);border-radius:6px;padding:2px 4px">分</label>
           <label>均速 <input type="number" id="speed" value="20" min="10" max="45" style="width:52px;border:1px solid var(--line);border-radius:6px;padding:2px 4px">km/h</label>
-          <span class="mut">弹性固定±30分 · 保温90分 · 早到≤15分自动放行；早到超出/迟到≤15分排线时问你；迟到>15分禁止 · 同址100m内自动并点</span>
+          <label title="匀餐数优先于收工时间：允许收工晚最多25分、总里程多绕最多10km，把餐从多餐骑手匀给少餐骑手（时限/保温/同园同址仍不破）" style="cursor:pointer"><input type="checkbox" id="balFirst" style="vertical-align:middle;margin-right:4px">均衡优先</label>
+          <span class="mut">弹性固定±30分 · 保温90分 · 早到≤15分自动放行；早到超出/迟到≤15分排线时问你；迟到>15分禁止 · 同址100m内自动并点 · 均衡优先=以收工最多晚25分为代价匀骑手餐数</span>
         </div>
       </details></div>
       <div class="srow"><label title="午窗（午餐）出发时刻">🌞午 <input type="time" id="depart" value="10:55"></label><span class="rlab" title="勾多位=并行同发（一人一趟），只勾1位=接力顺序班（仅管午窗）">骑手</span><span id="riderBox" style="display:inline-flex;gap:5px;flex-wrap:wrap"></span></div>
@@ -724,6 +725,7 @@ function runPlan(rows){
   var departL=document.getElementById('depart').value||'10:55';   // 午窗出发
   var departD=document.getElementById('departD').value||'16:55';  // 晚窗出发（独立可改）
   var maxTrip=+document.getElementById('maxTrip').value||90;
+var balFirst=!!(document.getElementById('balFirst')||{}).checked;   // 均衡优先：餐数匀给少餐骑手，代价是收工晚些、地理多绕些
   function calcSpeed(win){var rs=selRiders(win),sp=0,n=0;rs.forEach(function(r){if(r.speed){sp+=r.speed;n++;}});return n?sp/n:20;}
   var speedL=calcSpeed('l'),speedD=calcSpeed('d');   // 两窗骑手可不同，均速分开算
   var selRsL=selRiders('l'),selRsD=selRiders('d');   // 早晚窗骑手分开勾选
@@ -1157,9 +1159,12 @@ return list;}
       }
     }
   }
-  // —— 师傅餐数均衡：把活从多餐师傅匀给少餐师傅（时限/单班上限/同园同址全保，地理只做适度让步）——
+  // —— 师傅餐数均衡：把活从多餐师傅匀给少餐师傅（时限/单班上限/同园同址全保，地理只做适度让步；均衡优先=进一步放宽收工/地理代价）——
   (function(){
-    for(var bq=0;bq<6;bq++){
+    var endTol=balFirst?25:8;    // 均衡优先：允许全局收工最多晚 25 分换餐数均衡（默认仅 8 分）
+    var penCap=balFirst?150:60;  // 地理代价上限：均衡不吃掉连贯性的大头（均衡优先放宽到 150）
+    var tpTol=balFirst?10:0;     // 均衡优先：允许总里程最多多 10 km 换餐数均衡
+    for(var bq=0;bq<8;bq++){
       fullPolish();
       var meals={};trips.forEach(function(t){var k=t.rider?t.rider.name:'?';t.seg.forEach(function(gi){meals[k]=(meals[k]||0)+groups[gi].meals;});});
       var heavy=null,light=null,bestD=0;
@@ -1173,24 +1178,66 @@ return list;}
         for(var tj8=0;tj8<trips.length;tj8++){
           var trL=trips[tj8];if(!trL.rider||trL.rider.name!==light||!trL.seg.length)continue;
           for(var gi8=0;gi8<trH.seg.length;gi8++){
-            var gv8=trH.seg[gi8],m8=groups[gv8].meals;
-            var dNew=Math.abs((meals[heavy]-m8)-(meals[light]+m8));
-            if(dNew>=bestD)continue;   // 得真的更均衡才动
-            // 同园同址硬保护：这单在原趟里若有 ≤0.5km 且同波次（时限差≤30分）的伙伴，不许拆
-            var badPair=false;
-            for(var q8=0;q8<trH.seg.length;q8++){var og=trH.seg[q8];if(og===gv8)continue;
-              if(Math.abs(groups[og].dlm-groups[gv8].dlm)<=30&&km(groups[og].pos,groups[gv8].pos)<=0.5){badPair=true;break;}}
-            if(badPair)continue;
-            for(var p8=0;p8<=trL.seg.length;p8++){
-              var c8=trL.seg.slice();c8.splice(p8,0,gv8);
-              var l8=trips.map(function(t,ix){return ix===tj8?c8:(ix===ti8?t.seg.filter(function(g){return g!==gv8;}):t.seg);});
-              if(!coverOk(l8))continue;
-              var ch8=simList(l8);if(!ch8.allok)continue;
-              if(ch8.end>chain.end+8)continue;
-              if(ch8.tp>chain.tp+1e-9)continue;
-              if(nearPen(l8)>penB+60)continue;   // 地理代价上限：均衡不吃掉连贯性的大头
-              trips.length=0;l8.filter(function(s){return s.length;}).forEach(function(s){trips.push({seg:s});});
-              fullPolish();done8=true;break balout;
+            var gv8=trH.seg[gi8];
+            // 搬运单位：默认单点；均衡优先时同时试「同园同址伙伴对」（≤0.5km 且同波次，成对搬不破同园保护）
+            var bundles=[[gv8]];
+            if(balFirst)for(var qa8=0;qa8<trH.seg.length;qa8++){var ogA=trH.seg[qa8];if(ogA!==gv8&&Math.abs(groups[ogA].dlm-groups[gv8].dlm)<=30&&km(groups[ogA].pos,groups[gv8].pos)<=0.5)bundles.push([gv8,ogA]);}
+            for(var bi8=0;bi8<bundles.length;bi8++){
+              var bu=bundles[bi8],mB=0;bu.forEach(function(x8){mB+=groups[x8].meals;});
+              var dNew=Math.abs((meals[heavy]-mB)-(meals[light]+mB));
+              if(dNew>=bestD)continue;   // 得真的更均衡才动
+              // 同园同址硬保护：要搬的点若有 ≤0.5km 且同波次（时限差≤30分）的伙伴没一起走，不许拆
+              var badPair=false;
+              for(var q8=0;q8<bu.length&&!badPair;q8++){
+                for(var qb8=0;qb8<trH.seg.length;qb8++){var og=trH.seg[qb8];if(bu.indexOf(og)>=0)continue;
+                  if(Math.abs(groups[og].dlm-groups[bu[q8]].dlm)<=30&&km(groups[og].pos,groups[bu[q8]].pos)<=0.5){badPair=true;break;}}}
+              if(badPair)continue;
+              for(var p8=0;p8<=trL.seg.length;p8++){
+                var c8=trL.seg.slice();c8.splice.apply(c8,[p8,0].concat(bu));
+                var h8=trH.seg.filter(function(g){return bu.indexOf(g)<0;});
+                var l8=trips.map(function(t,ix){return ix===tj8?c8:(ix===ti8?h8:t.seg);});
+                if(!coverOk(l8))continue;
+                var ch8=simList(l8);if(!ch8.allok)continue;
+                if(ch8.end>chain.end+endTol)continue;
+                if(ch8.tp>chain.tp+tpTol+1e-9)continue;
+                if(nearPen(l8)>penB+penCap)continue;   // 地理代价上限
+                trips.length=0;l8.filter(function(s){return s.length;}).forEach(function(s){trips.push({seg:s});});
+                fullPolish();done8=true;break balout;
+              }
+            }
+          }
+        }
+      }
+      // —— 交换（仅均衡优先）：多餐骑手给出较多餐的点、换回少餐骑手一个较少餐的点（净转移，不用拉长少餐骑手路线也能匀）——
+      if(!done8&&balFirst){
+        swapout:
+        for(var ti9=0;ti9<trips.length;ti9++){
+          var trA=trips[ti9];if(!trA.rider||trA.rider.name!==heavy||!trA.seg.length)continue;
+          for(var tj9=0;tj9<trips.length;tj9++){
+            var trB=trips[tj9];if(!trB.rider||trB.rider.name!==light||!trB.seg.length)continue;
+            for(var ga9=0;ga9<trA.seg.length;ga9++){
+              var va9=trA.seg[ga9],ma9=groups[va9].meals;
+              for(var gb9=0;gb9<trB.seg.length;gb9++){
+                var vb9=trB.seg[gb9],net9=ma9-groups[vb9].meals;
+                if(net9<=0)continue;   // 必须净流向少餐骑手
+                var dNew9=Math.abs((meals[heavy]-net9)-(meals[light]+net9));
+                if(dNew9>=bestD)continue;
+                // 同园同址硬保护：换出各自趟的点若有同园伙伴留在原趟，不许换
+                var bad9=false;
+                for(var qc9=0;qc9<trA.seg.length&&!bad9;qc9++){var oc9=trA.seg[qc9];if(oc9!==va9&&Math.abs(groups[oc9].dlm-groups[va9].dlm)<=30&&km(groups[oc9].pos,groups[va9].pos)<=0.5)bad9=true;}
+                for(var qd9=0;qd9<trB.seg.length&&!bad9;qd9++){var od9=trB.seg[qd9];if(od9!==vb9&&Math.abs(groups[od9].dlm-groups[vb9].dlm)<=30&&km(groups[od9].pos,groups[vb9].pos)<=0.5)bad9=true;}
+                if(bad9)continue;
+                var lA9=trA.seg.map(function(g){return g===va9?vb9:g;});
+                var lB9=trB.seg.map(function(g){return g===vb9?va9:g;});
+                var l9=trips.map(function(t,ix){return ix===ti9?lA9:(ix===tj9?lB9:t.seg);});
+                if(!coverOk(l9))continue;
+                var ch9=simList(l9);if(!ch9.allok)continue;
+                if(ch9.end>chain.end+endTol)continue;
+                if(ch9.tp>chain.tp+tpTol+1e-9)continue;
+                if(nearPen(l9)>penB+penCap)continue;
+                trips.length=0;l9.forEach(function(s){trips.push({seg:s});});
+                fullPolish();done8=true;break swapout;
+              }
             }
           }
         }

@@ -52,7 +52,10 @@
   .trip .head .m{font-size:12px;color:var(--mut)}
   .trip table{width:100%;border-collapse:collapse;font-size:13px}
   .trip td{padding:6px 10px;border-top:1px dashed var(--line);vertical-align:top}
-  .trip td.seq{width:26px;color:var(--tc,#2980b9);font-weight:bold}
+  .trip td.seq{width:40px;color:var(--tc,#2980b9);font-weight:bold}
+.mvb{display:block;width:18px;height:15px;line-height:13px;padding:0;font-size:10px;text-align:center;border:1px solid var(--line);border-radius:4px;background:#fff;color:var(--mut);cursor:pointer;margin:1px 0}
+.mvb:hover{color:var(--tc,#2980b9);border-color:var(--tc,#2980b9)}
+.mvb:disabled{opacity:.25;cursor:default}
   .trip td.eta{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
   .trip td.eta small{display:block;color:var(--mut);font-size:11px}
   .trip .foot{padding:8px 10px;display:flex;gap:8px;flex-wrap:wrap;border-top:1px solid var(--line);background:#fafcfb}
@@ -149,6 +152,8 @@ var CX_MIN={easy:3,normal:5,hard:8};     // 电梯难等按 8 分/点计（2026-
 var TIME_MAP={l:'午餐',d:'晚餐',b:'午+晚'};
 var TRIP_COLORS=['#e91e63','#2980b9','#27ae60','#e67e22','#8e44ad','#00838f','#c0392b','#16a085'];
 var RIDER_TAB=[[15,20,25,30,35],[25,30,35,40,45],[30,35,40,45,50],[35,40,45,50,55]];  // 点数×公里 → 整趟班价
+function riderPrice(pts,kmOut){var pb=pts<=2?0:pts<=4?1:pts<=6?2:3,kb=kmOut<=3?0:kmOut<=8?1:kmOut<=13?2:kmOut<=18?3:4;
+return {p:RIDER_TAB[pb][kb],cap:pts>8||kmOut>22};}
 var AREA_STOPS=['四川省','成都市','武侯区','高新区','双流区','锦江区','青羊区','金牛区','成华区','天府新区','郫都区','龙泉驿区','街道','镇','号'];
 
 /* ===== 1. 存储（与主工具同 key，零迁移） ===== */
@@ -1024,8 +1029,9 @@ if(dk6<=0.5)risks.push({lv:'y',txt:'<b>'+escHtml(glabel(groups[i6]))+'</b> 与 <
       var si=Math.max(0,Math.min(tr.slot||0,free2.length-1));
       var dep=Math.max(tr.dep0||tr.dep,free2[si]);
       if(dep>tr.dep+0.5)tr.dep=dep;
-      var spdT=(tr.rider&&tr.rider.speed)?tr.rider.speed:speed;
-      var kmAcc=0,etas=[],clock=tr.dep,late=false,slack=1e9,waited=0;
+var spdT=(tr.rider&&tr.rider.speed)?tr.rider.speed:speed;
+tr._spd=spdT;   // 手动调点重算时用
+var kmAcc=0,etas=[],clock=tr.dep,late=false,slack=1e9,waited=0;
       for(var q=0;q<tr.seg.length;q++){var r=legRes[li++];var g=groups[tr.seg[q]];
         var from=(q===0)?ORIGIN:groups[tr.seg[q-1]].pos;
         var dk=r?r.km:km(from,g.pos)*ROAD_K;
@@ -1053,13 +1059,11 @@ if(dk6<=0.5)risks.push({lv:'y',txt:'<b>'+escHtml(glabel(groups[i6]))+'</b> 与 <
       free2[si]=clock;if(fin0>lastFin0)lastFin0=fin0;if(clock>lastFin)lastFin=clock;
       tr.latest=(slack===1e9||slack<0)?tr.dep:tr.dep+slack;
       var rp=riderPrice(tr.seg.length,kmOut);
-      tr._v={etas:etas,kmOut:kmOut,dur:dur,meals:tr.seg.reduce(function(s,gi){return s+groups[gi].meals;},0),
-        rp:rp,late:late,waited:waited,fin0:fin0,fin:clock,over:dur>maxTrip};
-      totKm+=kmAcc;totMeals+=tr._v.meals;
-    });
-    function riderPrice(pts,kmOut){var pb=pts<=2?0:pts<=4?1:pts<=6?2:3,kb=kmOut<=3?0:kmOut<=8?1:kmOut<=13?2:kmOut<=18?3:4;
-      return {p:RIDER_TAB[pb][kb],cap:pts>8||kmOut>22};}
-    planOut=null;
+tr._v={etas:etas,kmOut:kmOut,dur:dur,meals:tr.seg.reduce(function(s,gi){return s+groups[gi].meals;},0),
+  rp:rp,late:late,waited:waited,fin0:fin0,fin:clock,over:dur>maxTrip,_kmTot:kmAcc};
+totKm+=kmAcc;totMeals+=tr._v.meals;
+});
+planOut=null;
     done({key:sk,dep:departMin,trips:trips,groups:groups,mapLegs:mapLegs,apiFail:apiFail,fin:lastFin0,finBack:lastFin,round:round,totKm:totKm,totMeals:totMeals});
   });
   }
@@ -1082,11 +1086,77 @@ if(dk6<=0.5)risks.push({lv:'y',txt:'<b>'+escHtml(glabel(groups[i6]))+'</b> 与 <
         totKm+=s.totKm;totMeals+=s.totMeals;apiFail=apiFail||s.apiFail;
       });
       if(!allT.length){document.getElementById('result').innerHTML='<div class="risk r">没有可排的趟（全部建议跑腿/自送，见上方提示）。</div>';document.getElementById('paramCard').style.display='';return;}
-      planOut={trips:allT,groups:allG,totKm:totKm,totMeals:totMeals,apiFail:apiFail,round:round,selRs:selRsL,risks:risks,mapLegs:allML,sessions:outs,fin:outs[outs.length-1].fin};
+      planOut={trips:allT,groups:allG,totKm:totKm,totMeals:totMeals,apiFail:apiFail,round:round,selRs:selRsL,risks:risks,mapLegs:allML,sessions:outs,fin:outs[outs.length-1].fin,maxTrip:maxTrip};
       renderResult();return;}
     planSession(sessList[i].sk,sessList[i].dep,sessList[i].w,function(out){sessions.push(out);runNext(i+1);});
   })(0);
 }
+
+/* ===== 4.5 趟卡手动调点：▲▼ 交换相邻点，即时重算时间/里程（晚点>15分或超确认额度则拒绝） ===== */
+function polyLen(pts){var d=0;for(var i=1;i<pts.length;i++)d+=km(pts[i-1],pts[i]);return d;}
+function tripLegKm(P,ti){   // 从高德实测 mapLegs 恢复该趟每腿公里（顺序=各腿+返店腿）
+var off=0;for(var t=0;t<ti;t++)off+=P.trips[t].seg.length+1;
+var out=[];
+for(var q=0;q<=P.trips[ti].seg.length;q++){var ml=P.mapLegs[off+q];out.push(ml&&ml.pts&&ml.pts.length>1?polyLen(ml.pts):null);}
+return out;}
+function resimTrip(P,ti,seg){   // 模拟新顺序，规则与内核 _v 计算完全一致
+var tr=P.trips[ti],G=P.groups,oldSeg=tr.seg;
+var spd=(tr.rider&&tr.rider.speed)||tr._spd||20;
+var legKm=tripLegKm(P,ti);
+function samePt(a,b){return km(a,b)<1e-9;}
+function legK(i,s2){   // 腿 i 连接 s2[i-1]→s2[i]；两端与原顺序相同（含反向）则沿用实测，否则直线×1.35
+var from=(i===0)?ORIGIN:G[s2[i-1]].pos,to=(i===s2.length)?ORIGIN:G[s2[i]].pos;
+if(legKm[i]!=null){var fo=(i===0)?ORIGIN:G[oldSeg[i-1]].pos,toO=(i===oldSeg.length)?ORIGIN:G[oldSeg[i]].pos;
+if((samePt(from,fo)&&samePt(to,toO))||(samePt(from,toO)&&samePt(to,fo)))return legKm[i];}
+return km(from,to)*ROAD_K;}
+var clock=tr.dep,etas=[],late=false,slack=1e9,waited=0,maxViol=0,kmAcc=0;
+for(var q=0;q<seg.length;q++){
+var g=G[seg[q]];
+var dk=legK(q,seg);kmAcc+=dk;clock+=dk/spd*60;
+if(clock<g.lo){var ge=g.lo-clock;                  // 早到规则与内核一致
+if(ge<=EARLY_TOL+1e-9){}
+else if(g.okE!=null){if(ge>g.okE+1e-9){waited+=ge;clock=g.lo;}}
+else if(g.rejE===true){waited+=ge;clock=g.lo;}
+else if(ge<=EARLY_MAX+1e-9){}
+else{waited+=ge;clock=g.lo;}}
+etas.push({gi:seg[q],t:clock});
+slack=Math.min(slack,g.dlm-clock);
+var allow=g.dlm+(g.okL!=null?g.okL:((probeAsk&&g.rejL!==true)?LATE_TOL:0));
+var viol=clock-allow;if(viol>maxViol)maxViol=viol;
+if(clock>g.dlm+0.5)late=true;
+clock+=g.min;}
+var fin0=clock;
+var dkB=legK(seg.length,seg);kmAcc+=dkB;clock+=dkB/spd*60;
+var kmOut=kmAcc-dkB,dur=Math.round(fin0-tr.dep);
+return {etas:etas,kmOut:kmOut,dur:dur,meals:seg.reduce(function(s,gi){return s+G[gi].meals;},0),
+rp:riderPrice(seg.length,kmOut),late:late,waited:waited,fin0:fin0,fin:clock,
+over:dur>P.maxTrip,maxViol:maxViol,kmTot:kmAcc,
+latest:(slack===1e9||slack<0)?tr.dep:tr.dep+slack};}
+function movePt(ti,q,dir){
+var P=planOut;if(!P)return;
+var tr=P.trips[ti],nq=q+dir;
+if(!tr||nq<0||nq>=tr.seg.length)return;
+var seg=tr.seg.slice(),tmp=seg[q];seg[q]=seg[nq];seg[nq]=tmp;
+var r=resimTrip(P,ti,seg);
+if(r.maxViol>15.5){   // 超过15分硬线（或已确认额度）→ 拒绝
+var nm='';r.etas.forEach(function(e){var g=P.groups[e.gi];
+var allow=g.dlm+(g.okL!=null?g.okL:((probeAsk&&g.rejL!==true)?LATE_TOL:0));
+if(e.t-allow>15.5&&!nm)nm=g.names.map(function(m){return m.name;}).join('+');});
+toast('挪不动：这会让 '+nm+' 晚 '+Math.round(r.maxViol)+' 分送到，超过15分硬线');return;}
+if(r.over&&tr.seg.length>1)toast('提醒：这趟调后约 '+r.dur+' 分，超单班上限 '+P.maxTrip+' 分');
+r.etas.forEach(function(e){   // ≤15分的晚点：你亲手挪的=你确认了，记入问询表（重排后仍生效）
+var g=P.groups[e.gi];
+if(e.t>g.dlm+0.5){var gap=Math.round(e.t-g.dlm);
+var key=tr.sess+'|'+g.names.map(function(m){return m.name;}).join('+');
+_askMap[key]=_askMap[key]||{};
+_askMap[key].l=Math.max(gap,_askMap[key].l>0?_askMap[key].l:0);
+g.okL=Math.max(g.okL||0,gap);}});
+P.totKm+=r.kmTot-(tr._v._kmTot!=null?tr._v._kmTot:(tr._v.kmOut+km(P.groups[tr.seg[tr.seg.length-1]].pos,ORIGIN)));
+tr.seg=seg;tr.latest=r.latest;
+tr._v={etas:r.etas,kmOut:r.kmOut,dur:r.dur,meals:r.meals,rp:r.rp,late:r.late,waited:r.waited,fin0:r.fin0,fin:r.fin,over:r.over,_kmTot:r.kmTot};
+P.sessions.forEach(function(s){var mx=0;s.trips.forEach(function(t){if(t._v&&t._v.fin>mx)mx=t._v.fin;});s.fin=mx;});
+P.fin=P.sessions[P.sessions.length-1].fin;
+renderResult();toast('已调点，时间/里程已重算');}
 
 /* ===== 5. 输出渲染 ===== */
 function renderResult(){
@@ -1114,7 +1184,8 @@ function renderResult(){
       else if(eGap>EARLY_TOL){mark=' <span style="color:#d9a441">🕐 早到'+eGap+'分'+(g.okE!=null?'·已确认':'·<b>待你确认</b>')+'</span>';
         if(g.okE==null)asks.push({key:tr.sess+'|'+glabelOf(g),nm:(tr.sess==='d'?'晚窗':'午窗')+' '+glabelOf(g),kind:'e',gap:eGap,disp:'早到 '+eGap+' 分',plan:min2hm(eta.t),ref:'最早可送 '+min2hm(g.lo)});}
       var ets=eta.t<=g.dlm?('✓ 剩'+left+'分'):('⚠️ 晚'+lGap+'分');
-      return '<tr><td class="seq">'+(q+1)+'</td><td><b>'+escHtml(glabelOf(g))+'</b>'+bcMark(g)
+      return '<tr><td class="seq">'+(q+1)
++'<button class="mvb" data-mv="'+ti+':'+q+':-1" title="与上一位交换"'+(q===0?' disabled':'')+'>▲</button><button class="mvb" data-mv="'+ti+':'+q+':1" title="与下一位交换"'+(q===tr.seg.length-1?' disabled':'')+'>▼</button></td><td><b>'+escHtml(glabelOf(g))+'</b>'+bcMark(g)
         +(g.names.length>1?'<span class="mut">（同址并点 '+g.names.length+' 户）</span>':'')
         +'<br><span class="mut">'+escHtml(g.names[0].addr||'')+'</span>'+mark+'</td>'
         +'<td style="text-align:center;white-space:nowrap">'+g.meals+'餐</td>'
@@ -1128,8 +1199,8 @@ function renderResult(){
 +' · '+v.meals+'餐'+tr.seg.length+'点 · 约'+v.dur+'分 · '+min2hm(v.fin0)+'送完 · '+min2hm(v.fin)+'回店</span></div>'
       +'<table>'+rowsHtml+'</table>'
       +(v.late?'<div style="padding:4px 12px" class="warnInline">⚠️ 实测这趟有晚点风险，建议提前出发或把末点挪给别的趟</div>':'')
-      +'<div class="foot"><button class="btn-line" data-copy="'+ti+'">📋 复制发骑手文案</button>'
-      +'<button class="btn-ghost" data-map="'+ti+'">🗺 地图看这趟</button></div></div>';
++'<div class="foot"><button class="btn-line" data-copy="'+ti+'">📋 复制发骑手文案</button>'
++'<button class="btn-ghost" data-map="'+ti+'">🗺 地图看这趟</button><span class="mut" style="align-self:center;margin-left:auto">▲▼ 可调点，即时重算时间/里程</span></div></div>';
   });
   if(asks.length){
     html+='<div class="risk y" id="askPanel" style="margin-top:10px"><b>❓ '+asks.length+' 处时间需要你拍板</b>（本方案靠这些早到/晚到才排得下；你选完我按答案重排，选「不行」的那几单会自动换回去）';
@@ -1144,6 +1215,7 @@ function renderResult(){
   el.innerHTML=html;
   el.querySelectorAll('[data-copy]').forEach(function(b){b.onclick=function(){copyTrip(+b.getAttribute('data-copy'));};});
   el.querySelectorAll('[data-map]').forEach(function(b){b.onclick=function(){showMap(+b.getAttribute('data-map'));};});
+el.querySelectorAll('[data-mv]').forEach(function(b){b.onclick=function(){var a=b.getAttribute('data-mv').split(':');movePt(+a[0],+a[1],+a[2]);};});
   var ca=document.getElementById('copyAll');if(ca)ca.onclick=copyAll;
   var sm=document.getElementById('showMapBtn');if(sm)sm.onclick=function(){showMap(-1);};
   var ag=document.getElementById('askGo');

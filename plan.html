@@ -287,7 +287,7 @@ function matchCustIdx(user,addr){
 /* ===== 3. 确认流程 ===== */
 var rptRows=[];      // 解析+匹配结果：{no,user,addr,meals,winS,winE,dlMin,dlMemo,eaWanted,group,st,pos,match,checked,fail}
 var planRows=[];     // 确认后进入排线
-function toast(msg){var t=document.getElementById('toast');t.textContent=msg;t.classList.add('on');clearTimeout(t._h);t._h=setTimeout(function(){t.classList.remove('on');},2200);}
+function toast(msg,ms){var t=document.getElementById('toast');t.textContent=msg;t.classList.add('on');clearTimeout(t._h);t._h=setTimeout(function(){t.classList.remove('on');},ms||2200);}
 document.getElementById('todayTag').textContent=new Date().toLocaleDateString('zh-CN');
 
 document.getElementById('demoFill').onclick=function(){
@@ -1217,7 +1217,7 @@ var trB=P.trips[tj];if(!trB||qt<0||qt>trB.seg.length)return;
 var di=P.dropped.indexOf(gi);if(di<0)return;
 var segB=trB.seg.slice();segB.splice(qt,0,gi);
 var rB=resimTrip(P,tj,segB);
-if(rB.maxViol>15.5){toast('排不进：'+(trB.rider?trB.rider.name+' 趟里':'')+'会让 '+rejectName(P,rB)+' 晚 '+Math.round(rB.maxViol)+' 分送到，超过15分硬线');return;}
+  if(rB.maxViol>15.5){toast('排不进：'+(trB.rider?trB.rider.name+' 趟里':'')+'会让 '+rejectName(P,rB)+' 晚 '+Math.round(rB.maxViol)+' 分送到，超过15分硬线（试试其他趟，或拖到那趟靠前的位置）',6000);return;}
 if(rB.over&&segB.length>1)toast('提醒：这趟约 '+rB.dur+' 分，超单班上限 '+P.maxTrip+' 分');
 confirmLates(P,trB,rB);
 P.totKm+=rB.kmTot-oldKmTot(P,trB);
@@ -1225,7 +1225,21 @@ P.totMeals+=P.groups[gi].meals;
 P.dropped.splice(di,1);
 trB.seg=segB;applyTripRes(P,trB,rB);
 refreshFins(P);
-renderResult();toast('已排入，时间/里程已重算');}
+  renderResult();toast('已排入，时间/里程已重算');}
+function insertDroppedBest(gi,tj){   // ＋N 按钮：自动在整趟里找能排进的位置（逐位试插，取晚点最小且≤15分的）
+  var P=planOut;if(!P)return;
+  var trB=P.trips[tj];if(!trB)return;
+  var di=P.dropped.indexOf(gi);if(di<0)return;
+  var best=null,nearest=null;
+  for(var qt=0;qt<=trB.seg.length;qt++){
+    var s=trB.seg.slice();s.splice(qt,0,gi);
+    var r=resimTrip(P,tj,s);
+    if(!nearest||r.maxViol<nearest.r.maxViol)nearest={qt:qt,r:r};
+    if(r.maxViol<=15.5&&(!best||r.maxViol<best.r.maxViol))best={qt:qt,r:r};}
+  if(!best){toast('排不进：'+(trB.rider?trB.rider.name+' 趟里':'')+'任何位置都会让 '+rejectName(P,nearest.r)+' 晚 '+Math.round(nearest.r.maxViol)+' 分送到，超过15分硬线（试试其他趟）',6000);return;}
+  var pos=best.qt;
+  insertDropped(gi,tj,pos);
+  toast('已排入 '+(trB.rider?trB.rider.name:'')+' 趟第 '+(pos+1)+' 位，时间/里程已重算');}
 
 /* ===== 5. 输出渲染 ===== */
 function renderResult(){
@@ -1278,13 +1292,13 @@ function renderResult(){
   if(P.dropped&&P.dropped.length){
     html+='<div class="trip" id="dropPool" style="--tc:#8a8f98;margin-top:10px;border-style:dashed">'
       +'<div class="head"><span class="t">🗑 未排 '+P.dropped.length+' 点（已从趟里删减）</span>'
-      +'<span class="m">把上面的行拖到这里＝这趟不送；把这里拖回任意趟（或点＋趟号）＝重新排入</span></div><table>'
+      +'<span class="m">把上面的行拖到这里＝这趟不送；把这里拖回任意趟＝重新排入（或点＋趟号＝自动找那趟能排进的位置）</span></div><table>'
       +P.dropped.map(function(gi){var g=P.groups[gi];
         return '<tr draggable="true" data-gi="'+gi+'"><td class="seq">🖐</td><td><b>'+escHtml(glabelOf(g))+'</b>'+bcMark(g)
         +(g.names.length>1?'<span class="mut">（同址并点 '+g.names.length+' 户）</span>':'')
         +'<br><span class="mut">'+escHtml(g.names[0].addr||'')+'</span></td>'
         +'<td style="text-align:center;white-space:nowrap">'+g.meals+'餐</td>'
-        +'<td style="white-space:nowrap">'+P.trips.map(function(t,k){return '<button class="mvb" data-add="'+gi+':'+k+'" title="排到 '+(t.rider?escHtml(t.rider.name):'')+' 趟末尾">＋'+(k+1)+'</button>';}).join('')+'</td></tr>';}).join('')
+        +'<td style="white-space:nowrap">'+P.trips.map(function(t,k){return '<button class="mvb" data-add="'+gi+':'+k+'" title="自动找 '+(t.rider?escHtml(t.rider.name):'')+' 趟里能排进的位置">＋'+(k+1)+'</button>';}).join('')+'</td></tr>';}).join('')
       +'</table></div>';
   }
   if(asks.length){
@@ -1302,7 +1316,7 @@ function renderResult(){
   el.querySelectorAll('[data-map]').forEach(function(b){b.onclick=function(){showMap(+b.getAttribute('data-map'));};});
 el.querySelectorAll('[data-mv]').forEach(function(b){b.onclick=function(){var a=b.getAttribute('data-mv').split(':');movePt(+a[0],+a[1],+a[2]);};});
 el.querySelectorAll('[data-del]').forEach(function(b){b.onclick=function(){var a=b.getAttribute('data-del').split(':');removePt(+a[0],+a[1]);};});
-el.querySelectorAll('[data-add]').forEach(function(b){b.onclick=function(){var a=b.getAttribute('data-add').split(':');insertDropped(+a[0],+a[1],(P.trips[+a[1]]?P.trips[+a[1]].seg.length:0));};});
+el.querySelectorAll('[data-add]').forEach(function(b){b.onclick=function(){var a=b.getAttribute('data-add').split(':');insertDroppedBest(+a[0],+a[1]);};});
 var dragCtx=null;
 function bindDrop(zone,getPos,isPool){
 zone.addEventListener('dragover',function(ev){if(dragCtx){ev.preventDefault();if(ev.dataTransfer)ev.dataTransfer.dropEffect='move';zone.classList.add('dover');}});

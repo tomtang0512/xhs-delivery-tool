@@ -77,8 +77,8 @@
   details.wk-drop[open]>summary .arr{transform:rotate(180deg)}
   details.wk-drop[open]>summary{border-radius:12px 12px 4px 4px}
   .wk-body{padding-top:10px}
-  /* 周报宽屏：脱开 .wrap 的 760 限制，铺满浏览器可用宽度（--vww 由 JS 写入，避开滚动条误差） */
-  #pane-week{width:auto;margin-left:calc(50% - var(--vww,100vw)/2);margin-right:calc(50% - var(--vww,100vw)/2);padding:0 clamp(12px,1.4vw,22px)}
+  /* 周报：比正文宽（自适应屏幕，最宽 1200px 居中），--vww 由 JS 写入，避开 100vw 含滚动条的误差 */
+  #pane-week{--pw:min(1200px,calc(var(--vww,100vw) - 24px));width:var(--pw);margin-left:calc(50% - var(--pw)/2);margin-right:calc(50% - var(--pw)/2);padding:0 14px}
   #pane-week .wk-kpis{grid-template-columns:repeat(auto-fit,minmax(min(190px,100%),1fr))}
   #pane-week .wk-grid{grid-template-columns:repeat(auto-fit,minmax(min(430px,100%),1fr))}
   #pane-week .wk-chart{height:330px}
